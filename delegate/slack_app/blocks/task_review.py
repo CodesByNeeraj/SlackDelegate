@@ -37,6 +37,7 @@ def build_review_blocks(tasks: list, draft_id: str, channel_id: str, transcript_
             owner_display = f"<@{owner_slack_id}>"
         else:
             owner_display = f"*{task['owner_name']}* ⚠️ _unmatched — click Edit to assign_"
+        button_value = json.dumps({"draft_id": draft_id, "task_index": i})
         blocks.append(
             {
                 "type": "section",
@@ -44,12 +45,26 @@ def build_review_blocks(tasks: list, draft_id: str, channel_id: str, transcript_
                     "type": "mrkdwn",
                     "text": f"{owner_display}\n{task['task_description']}\n:calendar: {due_str}",
                 },
-                "accessory": {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Edit"},
-                    "action_id": "edit_task",
-                    "value": json.dumps({"draft_id": draft_id, "task_index": i}),
-                },
+            }
+        )
+        blocks.append(
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Edit"},
+                        "action_id": "edit_task",
+                        "value": button_value,
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Remove"},
+                        "style": "danger",
+                        "action_id": "remove_task",
+                        "value": button_value,
+                    },
+                ],
             }
         )
         blocks.append({"type": "divider"})

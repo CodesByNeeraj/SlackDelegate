@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 from shared.models import task as task_model
 from shared.models import transcript as transcript_model
 from slack_app.agents.tools.embeddings import generate_embedding
@@ -6,8 +8,9 @@ from slack_app.blocks.mytasks import build_mytasks_blocks
 from slack_app.blocks.delegate_status import build_delegate_status_blocks, build_delegate_digest_blocks
 from slack_app.blocks.cancel_select import build_cancel_select_blocks
 
+load_dotenv()
 ACTIVE_STATUSES = {"pending"}
-SANDBOX_WORKSPACE_ID = "E0BBVP0ATLN"
+SANDBOX_WORKSPACE_ID = os.environ["WORKSPACE_ID"]
 _DM_ONLY_MSG = "DM the Delegate bot to use this command."
 
 

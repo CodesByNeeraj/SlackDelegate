@@ -32,7 +32,7 @@ def build_task_dm_blocks(task: dict, assigned_by_slack_id: str) -> list:
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    "Reply here to update your status:\n"
+                    "Reply in this thread to update your status:\n"
                     "• *done* — mark it complete\n"
                     "• *need more time until [date]* — request a new due date\n"
                     "• *this should go to [name]* — request reassignment"

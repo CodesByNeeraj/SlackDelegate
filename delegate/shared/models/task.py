@@ -230,6 +230,37 @@ def attach_message_refs(workspace_id: str, task_id: str, summary_message_ts: str
     return response.get("Attributes")
 
 
+def get_tasks_created_by(creator_slack_id: str) -> list[dict]:
+    """Returns all tasks created by this user across all workspaces, sorted by created_at desc."""
+    from boto3.dynamodb.conditions import Attr
+    table = get_table(TABLE_NAME)
+    response = table.scan(FilterExpression=Attr("created_by").eq(creator_slack_id))
+    items = response.get("Items", [])
+    return sorted(items, key=lambda t: t.get("created_at", ""), reverse=True)
+
+
+def get_tasks_for_transcript(workspace_id: str, transcript_id: str) -> list[dict]:
+    from boto3.dynamodb.conditions import Key, Attr
+    table = get_table(TABLE_NAME)
+    response = table.query(
+        KeyConditionExpression=Key("workspace_id").eq(workspace_id),
+        FilterExpression=Attr("source_transcript_id").eq(transcript_id),
+    )
+    return response.get("Items", [])
+
+
+def get_task_by_dm_ts(dm_message_ts: str) -> dict | None:
+    """
+    Scans for the task whose DM thread matches this ts. Called on every DM reply
+    so it's intentionally a scan — add a GSI on dm_message_ts if volume demands it.
+    """
+    from boto3.dynamodb.conditions import Attr
+    table = get_table(TABLE_NAME)
+    response = table.scan(FilterExpression=Attr("dm_message_ts").eq(dm_message_ts))
+    items = response.get("Items", [])
+    return items[0] if items else None
+
+
 def delete_task(workspace_id: str, task_id: str) -> None:
     table = get_table(TABLE_NAME)
     table.delete_item(Key={"workspace_id": workspace_id, "task_id": task_id})

@@ -11,7 +11,7 @@ def _format_due_date(due_date: str | None) -> str:
 
 
 def _status_badge(status: str) -> str:
-    return {"pending": ":hourglass: Pending", "blocked": ":warning: Blocked"}.get(status, status)
+    return {"pending": ":hourglass: Pending"}.get(status, status)
 
 
 def build_mytasks_blocks(tasks: list) -> list:

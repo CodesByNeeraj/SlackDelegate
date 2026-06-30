@@ -69,7 +69,7 @@ def build_delegate_status_blocks(all_tasks: list) -> list:
         {"type": "divider"},
     ]
 
-    for task in latest_tasks:
+    for task in sorted(latest_tasks, key=lambda t: t.get("due_date") or "9999"):
         blocks.append(_task_row(task))
 
     return blocks

@@ -30,3 +30,14 @@ def match_name_to_slack_user(raw_name: str, slack_users: list[dict]) -> str | No
                 best_id = user["id"]
 
     return best_id if best_score >= MATCH_THRESHOLD else None
+
+
+#   1. Word overlap — splits both names into words and checks if any word appears in both. If yes, score
+#   is immediately 0.9. This handles cases like "Julio" matching "Julio Martinez" — one word in common
+#   is strong enough signal.
+#   2. SequenceMatcher fallback — if no word overlap, uses Python's difflib.SequenceMatcher which
+#   measures character-level similarity as a ratio between 0 and 1. "Jon" vs "John" would score around
+#   0.86; "Alice" vs "Bob" would score near 0.
+
+#   The best score across both real_name and display_name for all workspace users is kept. If the winner
+#   clears 0.6, that user's Slack ID is returned. Otherwise returns None (unmatched).

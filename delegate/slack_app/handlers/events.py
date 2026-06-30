@@ -9,7 +9,6 @@ from slack_app.agents.tools.task_extractor import extract_tasks
 from slack_app.agents.tools.embeddings import embed_transcript_chunks
 from slack_app.agents.reply_agent import interpret_reply
 from slack_app.services.slack_client import download_file_content
-from slack_app.services import slack_client
 from slack_app.blocks.task_review import build_review_blocks
 from slack_app.blocks.approval_request import build_approval_request_blocks
 from slack_app.services.name_matcher import match_name_to_slack_user
@@ -81,7 +80,7 @@ def _handle_file_upload(body, event, client, say, logger):
         return
 
     if not transcript_text or not transcript_text.strip():
-        say(text="That file appears to be empty, nothing for me to extract.", channel=channel_id)
+        say(text="That file appears to be empty, nothing for me to extract. Please upload a non-empty meeting transcript file.", channel=channel_id)
         return
 
     try:
@@ -163,6 +162,30 @@ def _handle_dm_reply(event, client, logger):
         logger.warning(f"No task found for DM thread ts={thread_ts}")
         return
 
+    if task.get("status") == "done":
+        client.chat_postMessage(
+            channel=dm_channel,
+            thread_ts=thread_ts,
+            text=":white_check_mark: This task has already been marked as complete.",
+        )
+        return
+
+    if task.get("status") == "cancelled":
+        client.chat_postMessage(
+            channel=dm_channel,
+            thread_ts=thread_ts,
+            text=":x: This task has been cancelled and is no longer active.",
+        )
+        return
+
+    if task.get("owner_slack_id") and task["owner_slack_id"] != replying_user:
+        client.chat_postMessage(
+            channel=dm_channel,
+            thread_ts=thread_ts,
+            text=":information_source: This task has been reassigned and is no longer assigned to you.",
+        )
+        return
+
     try:
         result = interpret_reply(task["task_description"], reply_text)
     except Exception as e:
@@ -173,6 +196,14 @@ def _handle_dm_reply(event, client, logger):
     args = result["args"]
     workspace_id = task["workspace_id"]
 
+    if action in ("request_reschedule", "request_reassignment") and task.get("pending_request"):
+        client.chat_postMessage(
+            channel=dm_channel,
+            thread_ts=thread_ts,
+            text=":hourglass: You already have a pending request waiting for the organizer's response. Please wait for them to approve or deny it before submitting a new one.",
+        )
+        return
+
     if action == "mark_done":
         task_model.update_task_status(workspace_id, task["task_id"], "done")
         client.chat_postMessage(
@@ -180,6 +211,12 @@ def _handle_dm_reply(event, client, logger):
             thread_ts=thread_ts,
             text=":white_check_mark: Got it, I've marked that as done!",
         )
+        if task.get("channel_id") and task.get("created_by"):
+            client.chat_postMessage(
+                channel=task["channel_id"],
+                thread_ts=task.get("summary_message_ts"),
+                text=f"<@{task['created_by']}> <@{replying_user}> has completed the task: *{task['task_description']}*",
+            )
 
     elif action == "request_reschedule":
         updated_task = task_model.request_reschedule(
@@ -188,11 +225,11 @@ def _handle_dm_reply(event, client, logger):
             requested_due_date=args["requested_due_date"],
             reason=args.get("reason", ""),
         )
-        slack_client.send_dm(
-            workspace_id=workspace_id,
-            user_id=task["created_by"],
-            text=f"<@{replying_user}> is requesting a deadline extension.",
-            blocks=build_approval_request_blocks(updated_task, "reschedule"),
+        client.chat_postMessage(
+            channel=task["channel_id"],
+            thread_ts=task.get("summary_message_ts"),
+            text=f"<@{task['created_by']}> — <@{replying_user}> is requesting a deadline extension.",
+            blocks=build_approval_request_blocks(updated_task, "reschedule", organizer_slack_id=task.get("created_by")),
         )
         client.chat_postMessage(
             channel=dm_channel,
@@ -201,22 +238,36 @@ def _handle_dm_reply(event, client, logger):
         )
 
     elif action == "request_reassignment":
+        try:
+            slack_users = client.users_list().get("members", [])
+            suggested_slack_id = match_name_to_slack_user(args["suggested_owner_name"], slack_users)
+        except Exception:
+            suggested_slack_id = None
+
         updated_task = task_model.request_reassignment(
             workspace_id=workspace_id,
             task_id=task["task_id"],
             suggested_owner_name=args["suggested_owner_name"],
             reason=args.get("reason", ""),
+            suggested_owner_slack_id=suggested_slack_id,
         )
-        slack_client.send_dm(
-            workspace_id=workspace_id,
-            user_id=task["created_by"],
-            text=f"<@{replying_user}> is requesting task reassignment.",
-            blocks=build_approval_request_blocks(updated_task, "reassignment"),
+        client.chat_postMessage(
+            channel=task["channel_id"],
+            thread_ts=task.get("summary_message_ts"),
+            text=f"<@{task['created_by']}> — <@{replying_user}> is requesting task reassignment.",
+            blocks=build_approval_request_blocks(updated_task, "reassignment", organizer_slack_id=task.get("created_by")),
         )
         client.chat_postMessage(
             channel=dm_channel,
             thread_ts=thread_ts,
             text=":eyes: Got it, I've flagged this to the organizer for review.",
+        )
+
+    elif action == "ask_for_date":
+        client.chat_postMessage(
+            channel=dm_channel,
+            thread_ts=thread_ts,
+            text=args.get("message", "Could you share a specific date you'd like to request?"),
         )
 
     elif action == "no_action_needed":

@@ -57,6 +57,10 @@ def _build_iso_due_date(date_str: str | None, time_str: str) -> str | None:
 
 def register_action_handlers(app):
 
+    @app.action("view_task_link")
+    def handle_view_task_link(ack):
+        ack()
+
     @app.action("edit_task")
     def handle_edit_task(ack, body, client, logger):
         ack()
@@ -267,9 +271,8 @@ def register_action_handlers(app):
         unassigned = [t for t in draft["tasks"] if not t.get("owner_slack_id")]
         if unassigned:
             names = ", ".join(t["owner_name"] for t in unassigned)
-            client.chat_postEphemeral(
+            client.chat_postMessage(
                 channel=channel_id,
-                user=uploaded_by,
                 text=f":warning: {len(unassigned)} task(s) still unassigned ({names}). Please assign an owner for each before delegating.",
             )
             return
@@ -301,6 +304,7 @@ def register_action_handlers(app):
                 task_id=t["task_id"],
                 summary_message_ts=summary_message_ts,
                 dm_message_ts=dm_response["ts"],
+                dm_channel_id=dm_response["channel"],
             )
 
             created.append(t)
@@ -427,12 +431,25 @@ def register_action_handlers(app):
         workspace_id = payload["workspace_id"]
         task_id = payload["task_id"]
 
-        # Capture request details before approve clears pending_request
         task_before = task_model.get_task(workspace_id, task_id)
         if not task_before:
             logger.error(f"Task {task_id} not found")
             return
         pending = task_before.get("pending_request", {})
+
+        # For reassignment: resolve the suggested name to a Slack ID before approving
+        if pending.get("type") == "reassignment":
+            try:
+                team_id = body.get("team_id") or body.get("team", {}).get("id")
+                slack_users = client.users_list(team_id=team_id).get("members", [])
+            except Exception:
+                slack_users = []
+            from slack_app.services.name_matcher import match_name_to_slack_user
+            new_slack_id = match_name_to_slack_user(pending.get("suggested_owner_name", ""), slack_users)
+            pending["new_owner_slack_id"] = new_slack_id
+
+            # Patch the pending_request on the task so approve_pending_request can read it
+            task_model.update_task_field(workspace_id, task_id, "pending_request", pending)
 
         try:
             task = task_model.approve_pending_request(workspace_id, task_id)
@@ -440,11 +457,14 @@ def register_action_handlers(app):
             logger.error(f"Approve failed: {e}")
             return
 
-        owner_ref = f"<@{task_before['owner_slack_id']}>" if task_before.get("owner_slack_id") else task_before["owner_name_raw"]
+        original_owner_slack_id = task_before.get("owner_slack_id")
+        owner_ref = f"<@{original_owner_slack_id}>" if original_owner_slack_id and original_owner_slack_id != "UNASSIGNED" else task_before["owner_name_raw"]
+
         if pending.get("type") == "reschedule":
             summary = f"{owner_ref} requested a deadline extension to *{pending.get('requested_due_date', '?')}*\nReason: {pending.get('reason') or 'none given'}"
         else:
-            summary = f"{owner_ref} requested reassignment to *{pending.get('suggested_owner_name', '?')}*\nReason: {pending.get('reason') or 'none given'}"
+            new_owner_display = f"<@{pending['new_owner_slack_id']}>" if pending.get("new_owner_slack_id") else pending.get("suggested_owner_name", "?")
+            summary = f"{owner_ref} requested reassignment to *{new_owner_display}*\nReason: {pending.get('reason') or 'none given'}"
 
         client.chat_update(
             channel=body["channel"]["id"],
@@ -463,13 +483,38 @@ def register_action_handlers(app):
             ],
         )
 
-        if task.get("owner_slack_id") and task["owner_slack_id"] != "UNASSIGNED" and task.get("dm_message_ts"):
-            dm_channel = client.conversations_open(users=[task["owner_slack_id"]])["channel"]["id"]
+        # Notify original owner in their thread
+        if original_owner_slack_id and original_owner_slack_id != "UNASSIGNED" and task_before.get("dm_message_ts"):
+            orig_dm_channel = client.conversations_open(users=[original_owner_slack_id])["channel"]["id"]
+            if pending.get("type") == "reschedule":
+                orig_msg = f":white_check_mark: Your deadline extension request was approved. New due date: *{pending.get('requested_due_date', '?')}*"
+            else:
+                orig_msg = ":white_check_mark: Your reassignment request was approved. The task has been reassigned."
             client.chat_postMessage(
-                channel=dm_channel,
-                thread_ts=task["dm_message_ts"],
-                text=":white_check_mark: Your request was approved.",
+                channel=orig_dm_channel,
+                thread_ts=task_before["dm_message_ts"],
+                text=orig_msg,
             )
+
+        # For reassignment: send a fresh task DM to the new owner
+        if pending.get("type") == "reassignment":
+            new_slack_id = pending.get("new_owner_slack_id")
+            if new_slack_id and new_slack_id != "UNASSIGNED":
+                from slack_app.blocks.task_dm import build_task_dm_blocks
+                dm_response = slack_client.send_dm(
+                    workspace_id=workspace_id,
+                    user_id=new_slack_id,
+                    text=f"You've been assigned a task: {task['task_description']}",
+                    blocks=build_task_dm_blocks(task, task_before["created_by"]),
+                )
+                task_model.attach_message_refs(
+                    workspace_id=workspace_id,
+                    task_id=task_id,
+                    dm_message_ts=dm_response["ts"],
+                    dm_channel_id=dm_response["channel"],
+                )
+            else:
+                logger.warning(f"Reassignment approved but could not match '{pending.get('suggested_owner_name')}' to a Slack user — no DM sent.")
 
     @app.action("deny_request")
     def handle_deny_request(ack, body, client, logger):

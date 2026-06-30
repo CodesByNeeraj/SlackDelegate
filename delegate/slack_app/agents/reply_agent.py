@@ -14,8 +14,9 @@ Today's date is {today}.
 
 Based on their reply, call exactly one tool:
 - mark_done: they are saying the task is complete ("done", "finished", "sent", "completed", etc.)
-- request_reschedule: they need more time or want to push the deadline
+- request_reschedule: they need more time and explicitly mention a specific future date to reschedule to
 - request_reassignment: they think someone else should own this task
+- ask_for_date: they want more time but have not mentioned a specific date — ask them to provide one
 - no_action_needed: the reply is a question, casual acknowledgement, or not an actionable update
 
 When calling request_reschedule or request_reassignment, extract the reason directly from the person's reply. Use their own words as closely as possible — do not invent or infer a reason that isn't stated. If they give no reason, set reason to an empty string.
@@ -65,6 +66,23 @@ _TOOLS = [
                     "reason": {"type": "string", "description": "Reason for requesting reassignment."},
                 },
                 "required": ["suggested_owner_name", "reason"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ask_for_date",
+            "description": "The person wants more time but did not mention a specific date. Ask them to provide one.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "A short, friendly message asking the person for a specific date.",
+                    }
+                },
+                "required": ["message"],
             },
         },
     },

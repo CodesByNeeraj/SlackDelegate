@@ -123,7 +123,7 @@ def request_reschedule(workspace_id: str, task_id: str, requested_due_date: str,
     return response.get("Attributes")
 
 
-def request_reassignment(workspace_id: str, task_id: str, suggested_owner_name: str, reason: str = "") -> dict:
+def request_reassignment(workspace_id: str, task_id: str, suggested_owner_name: str, reason: str = "", suggested_owner_slack_id: str | None = None) -> dict:
     """
     Recipient asked for the task to go to someone else, or disputed
     ownership entirely. Stored as a pending request, not applied directly.
@@ -132,6 +132,7 @@ def request_reassignment(workspace_id: str, task_id: str, suggested_owner_name: 
     pending_request = {
         "type": "reassignment",
         "suggested_owner_name": suggested_owner_name,
+        "suggested_owner_slack_id": suggested_owner_slack_id,
         "reason": reason,
         "requested_at": _now_iso(),
     }
@@ -171,11 +172,13 @@ def approve_pending_request(workspace_id: str, task_id: str) -> dict:
             ReturnValues="ALL_NEW",
         )
     elif request["type"] == "reassignment":
+        new_slack_id = request.get("new_owner_slack_id") or "UNASSIGNED"
         response = table.update_item(
             Key={"workspace_id": workspace_id, "task_id": task_id},
-            UpdateExpression="SET owner_name_raw = :oname, pending_request = :null_val, updated_at = :updated_at",
+            UpdateExpression="SET owner_name_raw = :oname, owner_slack_id = :oslack, pending_request = :null_val, updated_at = :updated_at",
             ExpressionAttributeValues={
                 ":oname": request["suggested_owner_name"],
+                ":oslack": new_slack_id,
                 ":null_val": None,
                 ":updated_at": _now_iso(),
             },
@@ -202,7 +205,7 @@ def deny_pending_request(workspace_id: str, task_id: str) -> dict:
     return response.get("Attributes")
 
 
-def attach_message_refs(workspace_id: str, task_id: str, summary_message_ts: str = None, dm_message_ts: str = None) -> dict:
+def attach_message_refs(workspace_id: str, task_id: str, summary_message_ts: str = None, dm_message_ts: str = None, dm_channel_id: str = None) -> dict:
     """
     Called after the organizer sends tasks out. Stores the Slack message
     timestamps so we can later edit the summary card or find the DM thread.
@@ -217,6 +220,10 @@ def attach_message_refs(workspace_id: str, task_id: str, summary_message_ts: str
     if dm_message_ts is not None:
         update_parts.append("dm_message_ts = :dmts")
         values[":dmts"] = dm_message_ts
+    #for view task button --> to bring user to the message thread
+    if dm_channel_id is not None:
+        update_parts.append("dm_channel_id = :dmcid")
+        values[":dmcid"] = dm_channel_id
 
     update_parts.append("updated_at = :updated_at")
     update_expression = "SET " + ", ".join(update_parts)
@@ -237,6 +244,16 @@ def get_tasks_created_by(creator_slack_id: str) -> list[dict]:
     response = table.scan(FilterExpression=Attr("created_by").eq(creator_slack_id))
     items = response.get("Items", [])
     return sorted(items, key=lambda t: t.get("created_at", ""), reverse=True)
+
+
+def update_task_field(workspace_id: str, task_id: str, field: str, value) -> None:
+    table = get_table(TABLE_NAME)
+    table.update_item(
+        Key={"workspace_id": workspace_id, "task_id": task_id},
+        UpdateExpression="SET #f = :v, updated_at = :updated_at",
+        ExpressionAttributeNames={"#f": field},
+        ExpressionAttributeValues={":v": value, ":updated_at": _now_iso()},
+    )
 
 
 def get_tasks_for_transcript(workspace_id: str, transcript_id: str) -> list[dict]:

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def _format_due_date(due_date: str | None) -> str:
@@ -10,7 +10,18 @@ def _format_due_date(due_date: str | None) -> str:
         return due_date
 
 
-def _status_emoji(status: str) -> str:
+def _is_overdue(due_date: str | None) -> bool:
+    if not due_date or due_date == "NONE":
+        return False
+    try:
+        return due_date < datetime.now(timezone.utc).isoformat()
+    except Exception:
+        return False
+
+
+def _status_emoji(status: str, due_date: str | None = None) -> str:
+    if status == "pending" and _is_overdue(due_date):
+        return ":red_circle:"
     return {"pending": ":hourglass:", "done": ":white_check_mark:", "cancelled": ":x:"}.get(status, ":grey_question:")
 
 
@@ -35,13 +46,17 @@ def _group_by_transcript(tasks: list) -> list[tuple[str, list]]:
 
 
 def _task_row(task: dict) -> dict:
+    status = task.get("status", "pending")
+    due_date = task.get("due_date")
+    overdue = status == "pending" and _is_overdue(due_date)
+    label = " *(Late)*" if overdue else ""
     return {
         "type": "section",
         "text": {
             "type": "mrkdwn",
             "text": (
-                f"{_status_emoji(task.get('status', 'pending'))} *{task['task_description']}*\n"
-                f":bust_in_silhouette: {_owner_ref(task)}   :calendar: {_format_due_date(task.get('due_date'))}"
+                f"{_status_emoji(status, due_date)} *{task['task_description']}*{label}\n"
+                f":bust_in_silhouette: {_owner_ref(task)}   :calendar: {_format_due_date(due_date)}"
             ),
         },
     }
@@ -57,14 +72,16 @@ def build_delegate_status_blocks(all_tasks: list) -> list:
 
     pending = sum(1 for t in latest_tasks if t.get("status") == "pending")
     done = sum(1 for t in latest_tasks if t.get("status") == "done")
+    overdue = sum(1 for t in latest_tasks if t.get("status") == "pending" and _is_overdue(t.get("due_date")))
 
     date_str = datetime.fromisoformat(latest_tasks[0]["created_at"]).strftime("%b %d, %Y") if latest_tasks[0].get("created_at") else "recent"
+    overdue_str = f"   :red_circle: *{overdue} overdue*" if overdue else ""
 
     blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": f"Last delegation — {date_str}"}},
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f":hourglass: *{pending} pending*   :white_check_mark: *{done} done*"},
+            "text": {"type": "mrkdwn", "text": f":hourglass: *{pending} pending*   :white_check_mark: *{done} done*{overdue_str}"},
         },
         {"type": "divider"},
     ]
@@ -84,12 +101,14 @@ def build_delegate_digest_blocks(all_tasks: list) -> list:
 
     total_pending = sum(1 for t in all_tasks if t.get("status") == "pending")
     total_done = sum(1 for t in all_tasks if t.get("status") == "done")
+    total_overdue = sum(1 for t in all_tasks if t.get("status") == "pending" and _is_overdue(t.get("due_date")))
+    overdue_str = f"   :red_circle: *{total_overdue} overdue*" if total_overdue else ""
 
     blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": "Delegation Digest"}},
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f":hourglass: *{total_pending} pending across all meetings*   :white_check_mark: *{total_done} done*"},
+            "text": {"type": "mrkdwn", "text": f":hourglass: *{total_pending} pending across all meetings*   :white_check_mark: *{total_done} done*{overdue_str}"},
         },
         {"type": "divider"},
     ]
@@ -98,10 +117,12 @@ def build_delegate_digest_blocks(all_tasks: list) -> list:
         date_str = datetime.fromisoformat(tasks[0]["created_at"]).strftime("%b %d, %Y") if tasks[0].get("created_at") else f"Meeting {i + 1}"
         pending = sum(1 for t in tasks if t.get("status") == "pending")
         done = sum(1 for t in tasks if t.get("status") == "done")
+        overdue = sum(1 for t in tasks if t.get("status") == "pending" and _is_overdue(t.get("due_date")))
+        overdue_str = f"   :red_circle: {overdue} overdue" if overdue else ""
 
         blocks.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*{date_str}* — {len(tasks)} task(s)   :hourglass: {pending} pending   :white_check_mark: {done} done"},
+            "text": {"type": "mrkdwn", "text": f"*{date_str}* — {len(tasks)} task(s)   :hourglass: {pending} pending   :white_check_mark: {done} done{overdue_str}"},
         })
         for task in tasks:
             blocks.append(_task_row(task))

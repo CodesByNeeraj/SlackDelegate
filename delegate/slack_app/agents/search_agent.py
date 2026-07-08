@@ -2,29 +2,34 @@ import os
 from datetime import datetime, timezone
 from openai import OpenAI
 from dotenv import load_dotenv
+from shared.models import task as task_model
+from shared.models import transcript as transcript_model
+from slack_app.agents.tools.embeddings import generate_embedding
+from slack_app.agents.tools.task_filter import apply_task_filter
 
 load_dotenv()
 
 _client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+_FORMATTING_RULES = """
+Format your response for Slack:
+- Use *bold* (single asterisk) for emphasis, never **double asterisk**
+- Use _italic_ (underscore) for italics
+- Use • for bullet points, never - or *
+- Keep responses concise
+"""
+
 _TRANSCRIPT_SYSTEM_PROMPT = """You are Delegate, an intelligent meeting intelligence agent. You surface insights from past meeting transcripts and their delegated tasks.
 
 Answer the question using only the transcript excerpts and task information provided below. Be concise and specific.
 If the answer cannot be found in the provided context, say so clearly and do not guess or make up information.
-"""
+""" + _FORMATTING_RULES
 
 _TASKS_SYSTEM_PROMPT = """You are Delegate, an intelligent task intelligence agent. You have real-time visibility into delegated tasks and their current status.
 
 Answer the question using only the task data provided. Be concise and specific.
 If the answer cannot be determined from the task data, say so clearly.
-"""
-
-_COMBINED_SYSTEM_PROMPT = """You are Delegate, an intelligent meeting and task intelligence agent. You cross-reference live task data with meeting transcript context to surface accurate insights.
-
-You have access to both transcript excerpts and live task data. Use both to answer accurately.
-Prefer current task status data over what the transcript says when they conflict.
-Be concise and specific. Do not guess or make up information.
-"""
+""" + _FORMATTING_RULES
 
 
 def _format_date(iso_str: str) -> str:
@@ -80,7 +85,7 @@ def answer_search_query(query: str, chunks_with_tasks: list[tuple[dict, list]], 
     user_line = f"The person asking is: {user_name}\n" if user_name else ""
 
     response = _client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": _TRANSCRIPT_SYSTEM_PROMPT},
             {"role": "user", "content": f"Today's date: {_today()}\n{user_line}Question: {query}\n\nContext:\n{context}"},
@@ -96,7 +101,7 @@ def answer_from_tasks(query: str, tasks: list, user_name: str | None = None) -> 
     user_line = f"The person asking is: {user_name}\n" if user_name else ""
 
     response = _client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": _TASKS_SYSTEM_PROMPT},
             {"role": "user", "content": f"Today's date: {_today()}\n{user_line}Question: {query}\n\nTasks:\n{tasks_context}"},
@@ -106,34 +111,28 @@ def answer_from_tasks(query: str, tasks: list, user_name: str | None = None) -> 
     return response.choices[0].message.content
 
 
-def answer_combined(
-    query: str,
-    tasks: list,
-    chunks_with_tasks: list[tuple[dict, list]],
-    user_name: str | None = None,
-) -> str:
-    """Route 3: Tasks DB + semantic search combined."""
-    tasks_section = f"Current task data:\n{_format_flat_tasks(tasks)}"
 
-    transcript_parts = []
-    for i, (chunk, chunk_tasks) in enumerate(chunks_with_tasks, 1):
-        date_str = _format_date(chunk.get("created_at", ""))
-        transcript_parts.append(
-            f"[Excerpt {i} — from meeting on {date_str}]\n"
-            f"{chunk['chunk_text']}\n\n"
-            f"Tasks from this meeting (may be stale):\n{_format_tasks(chunk_tasks)}"
-        )
+def run(query: str, user_id: str, workspace_id: str, user_name: str | None = None) -> tuple[str, list]:
+    """
+    Search agent entry point — invoked by master orchestrator via invoke_search_agent.
+    Embeds the query, searches transcript chunks, fetches their tasks, and synthesizes an answer.
+    Returns (answer_text, slack_blocks).
+    """
+    query_embedding = generate_embedding(query)
+    top_chunks = transcript_model.search_transcripts(workspace_id, query_embedding, top_n=3)
 
-    transcript_section = "\n\n---\n\n".join(transcript_parts) if transcript_parts else "No relevant transcript excerpts found."
-    context = f"{tasks_section}\n\n===\n\nTranscript excerpts:\n{transcript_section}"
-    user_line = f"The person asking is: {user_name}\n" if user_name else ""
+    if not top_chunks:
+        answer = "Sorry, I could not find anything matching your query. Please try rephrasing or providing more context."
+    else:
+        chunks_with_tasks = [
+            (chunk, task_model.get_tasks_for_transcript(chunk["workspace_id"], chunk["transcript_id"]))
+            for chunk in top_chunks
+        ]
+        answer = answer_search_query(query, chunks_with_tasks, user_name=user_name)
 
-    response = _client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": _COMBINED_SYSTEM_PROMPT},
-            {"role": "user", "content": f"Today's date: {_today()}\n{user_line}Question: {query}\n\nContext:\n{context}"},
-        ],
-        temperature=0.3,
-    )
-    return response.choices[0].message.content
+    blocks = [
+        {"type": "section", "text": {"type": "mrkdwn", "text": f":mag: *Search results for:* _{query}_"}},
+        {"type": "divider"},
+        {"type": "section", "text": {"type": "mrkdwn", "text": answer}},
+    ]
+    return answer, blocks

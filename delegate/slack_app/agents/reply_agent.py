@@ -106,7 +106,7 @@ def interpret_reply(task_description: str, reply_text: str, today: str = None) -
         today = datetime.now().strftime("%Y-%m-%d")
 
     response = _client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT.format(today=today)},
             {"role": "user", "content": f"Task: {task_description}\n\nReply: {reply_text}"},

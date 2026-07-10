@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime, date as date_type, timezone, timedelta
 from dotenv import load_dotenv
 
@@ -12,7 +11,6 @@ from slack_app.services import slack_client
 from slack_app.blocks.cancel_select import build_cancel_select_blocks
 
 load_dotenv()
-SANDBOX_WORKSPACE_ID = os.environ["WORKSPACE_ID"]
 
 TIME_OPTIONS = [
     ("09:00", "9:00 AM"),
@@ -262,6 +260,7 @@ def register_action_handlers(app):
         channel_id = payload["channel_id"]
         transcript_id = payload["transcript_id"]
         uploaded_by = body["user"]["id"]
+        workspace_id = body.get("team", {}).get("id") or body.get("team_id", "")
 
         draft = drafts.get_draft(draft_id)
         if not draft:
@@ -282,7 +281,7 @@ def register_action_handlers(app):
 
         for task in draft["tasks"]:
             t = task_model.create_task(
-                workspace_id=SANDBOX_WORKSPACE_ID,
+                workspace_id=workspace_id,
                 task_description=task["task_description"],
                 owner_name_raw=task["owner_name"],
                 created_by=uploaded_by,
@@ -293,14 +292,14 @@ def register_action_handlers(app):
             )
 
             dm_response = slack_client.send_dm(
-                workspace_id=SANDBOX_WORKSPACE_ID,
+                workspace_id=workspace_id,
                 user_id=task["owner_slack_id"],
                 text=f"You've been assigned a task: {task['task_description']}",
                 blocks=build_task_dm_blocks(t, uploaded_by),
             )
 
             task_model.attach_message_refs(
-                workspace_id=SANDBOX_WORKSPACE_ID,
+                workspace_id=workspace_id,
                 task_id=t["task_id"],
                 summary_message_ts=summary_message_ts,
                 dm_message_ts=dm_response["ts"],
@@ -366,7 +365,8 @@ def register_action_handlers(app):
             return
 
         organizer_id = body["user"]["id"]
-        all_tasks = task_model.get_tasks_created_by(organizer_id)
+        workspace_id = body.get("team", {}).get("id") or body.get("team_id", "")
+        all_tasks = task_model.get_tasks_created_by(workspace_id, organizer_id)
         active_tasks = [t for t in all_tasks if t.get("status") == "pending"]
 
         client.chat_update(

@@ -1,4 +1,3 @@
-import os
 import uuid
 from dotenv import load_dotenv
 from slack_app.agents.tools.parsetext import (
@@ -8,16 +7,19 @@ from slack_app.agents.tools.parsetext import (
 from slack_app.agents.tools.task_extractor import extract_tasks
 from slack_app.agents.tools.embeddings import embed_transcript_chunks
 from slack_app.agents.reply_agent import interpret_reply
+from slack_app.agents import master_orchestrator, search_agent
+from slack_app.agents.tools import status_tool, digest_tool
+from slack_app.agents.tools.task_filter import apply_task_filter
 from slack_app.services.slack_client import download_file_content
 from slack_app.blocks.task_review import build_review_blocks
 from slack_app.blocks.approval_request import build_approval_request_blocks
 from slack_app.services.name_matcher import match_name_to_slack_user
 from slack_app import drafts
+from slack_app.handlers.oauth import handle_app_uninstalled
 from shared.models import transcript as transcript_model
 from shared.models import task as task_model
 
 load_dotenv()
-SANDBOX_WORKSPACE_ID = os.environ["WORKSPACE_ID"]
 
 
 def register_event_handlers(app):
@@ -28,14 +30,21 @@ def register_event_handlers(app):
         if event.get("bot_id") or event.get("subtype") == "bot_message":
             return
 
+        workspace_id = body.get("team_id", "")
+
         # DM reply to a task thread
         if event.get("channel_type") == "im" and event.get("thread_ts"):
-            _handle_dm_reply(event, client, logger)
+            _handle_dm_reply(event, client, logger, workspace_id)
             return
 
         # File upload in a channel
         if event.get("subtype") == "file_share":
-            _handle_file_upload(body, event, client, say, logger)
+            _handle_file_upload(body, event, client, say, logger, workspace_id)
+            return
+
+        # Free-form DM message (no thread, no file) — route through master orchestrator
+        if event.get("channel_type") == "im" and event.get("text"):
+            _handle_general_dm(event, client, logger, workspace_id)
             return
 
     @app.event("file_shared")
@@ -44,8 +53,15 @@ def register_event_handlers(app):
         # this just silences Slack's duplicate event for the same upload
         pass
 
+    @app.event("app_uninstalled")
+    def handle_app_uninstalled_event(body, logger):
+        workspace_id = body.get("team_id", "")
+        if workspace_id:
+            handle_app_uninstalled(workspace_id)
+            logger.info(f"Workspace {workspace_id} marked as uninstalled")
 
-def _handle_file_upload(body, event, client, say, logger):
+
+def _handle_file_upload(body, event, client, say, logger, workspace_id: str):
     files = event.get("files", [])
     if not files:
         return
@@ -63,7 +79,7 @@ def _handle_file_upload(body, event, client, say, logger):
     say(text="Got it, reading your transcript now...", channel=channel_id)
 
     try:
-        file_bytes = download_file_content(SANDBOX_WORKSPACE_ID, file_url)
+        file_bytes = download_file_content(workspace_id, file_url)
     except Exception as e:
         logger.error(f"Failed to download file: {e}")
         say(text="I had trouble downloading that file, can you try uploading it again?", channel=channel_id)
@@ -90,7 +106,7 @@ def _handle_file_upload(body, event, client, say, logger):
         chunks = None
 
     transcript_record = transcript_model.create_transcript(
-        workspace_id=SANDBOX_WORKSPACE_ID,
+        workspace_id=workspace_id,
         raw_text=transcript_text,
         uploaded_by=uploaded_by,
         channel_id=channel_id,
@@ -136,6 +152,7 @@ def _handle_file_upload(body, event, client, say, logger):
         tasks=tasks,
         transcript_id=transcript_id,
         channel_id=channel_id,
+        workspace_id=workspace_id,
     )
 
     blocks = build_review_blocks(tasks, draft_id, channel_id, transcript_id)
@@ -148,7 +165,7 @@ def _handle_file_upload(body, event, client, say, logger):
     drafts.set_message_ts(draft_id, response["ts"])
 
 
-def _handle_dm_reply(event, client, logger):
+def _handle_dm_reply(event, client, logger, workspace_id: str):
     thread_ts = event["thread_ts"]
     reply_text = event.get("text", "").strip()
     replying_user = event["user"]
@@ -157,7 +174,7 @@ def _handle_dm_reply(event, client, logger):
     if not reply_text:
         return
 
-    task = task_model.get_task_by_dm_ts(thread_ts)
+    task = task_model.get_task_by_dm_ts(workspace_id, thread_ts)
     if not task:
         logger.warning(f"No task found for DM thread ts={thread_ts}")
         return
@@ -272,3 +289,64 @@ def _handle_dm_reply(event, client, logger):
 
     elif action == "no_action_needed":
         pass
+
+
+def _handle_general_dm(event, client, logger, workspace_id: str):
+    text = event.get("text", "").strip()
+    user_id = event["user"]
+    channel_id = event["channel"]
+
+    try:
+        classification = master_orchestrator.classify(text)
+    except Exception as e:
+        logger.error(f"Master orchestrator failed: {e}")
+        return
+
+    route = classification["route"]
+    args = classification["args"]
+    logger.info(f"Master orchestrator: route={route} args={args}")
+
+    if route == "out_of_scope":
+        client.chat_postMessage(
+            channel=channel_id,
+            text=":no_entry: Sorry, I can only help with delegated tasks and meeting transcripts.",
+        )
+        return
+
+    try:
+        try:
+            user_info = client.users_info(user=user_id)
+            user_name = user_info["user"].get("real_name") or user_info["user"].get("name")
+        except Exception:
+            user_name = None
+
+        if route == "invoke_search_agent":
+            query = args.get("query", text)
+            searching_msg = client.chat_postMessage(channel=channel_id, text=":mag: Searching...")
+            answer, blocks = search_agent.run(query, user_id, workspace_id, user_name=user_name)
+            client.chat_update(channel=channel_id, ts=searching_msg["ts"], text=answer, blocks=blocks)
+
+        elif route == "tasks_db_search":
+            query = args.get("query", text)
+            searching_msg = client.chat_postMessage(channel=channel_id, text=":mag: Searching...")
+            all_tasks = task_model.get_tasks_created_by(workspace_id, user_id)
+            filtered = apply_task_filter(all_tasks, args)
+            answer = search_agent.answer_from_tasks(query, filtered, user_name=user_name)
+            blocks = [
+                {"type": "section", "text": {"type": "mrkdwn", "text": f":mag: *Search results for:* _{query}_"}},
+                {"type": "divider"},
+                {"type": "section", "text": {"type": "mrkdwn", "text": answer}},
+            ]
+            client.chat_update(channel=channel_id, ts=searching_msg["ts"], text=answer, blocks=blocks)
+
+        elif route == "invoke_status_tool":
+            blocks, text_summary = status_tool.run(user_id, workspace_id)
+            client.chat_postMessage(channel=channel_id, blocks=blocks, text=text_summary)
+
+        elif route == "invoke_digest_tool":
+            blocks, text_summary = digest_tool.run(user_id, workspace_id)
+            client.chat_postMessage(channel=channel_id, blocks=blocks, text=text_summary)
+
+    except Exception as e:
+        logger.error(f"Sub-agent failed (route={route}): {e}")
+        client.chat_postMessage(channel=channel_id, text="Something went wrong. Please try again.")

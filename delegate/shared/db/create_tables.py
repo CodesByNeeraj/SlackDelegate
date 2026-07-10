@@ -81,8 +81,28 @@ def create_transcripts_table():
     print("Created table: Transcripts")
 
 
+def create_drafts_table():
+    table = dynamodb.create_table(
+        TableName="Drafts",
+        KeySchema=[
+            {"AttributeName": "draft_id", "KeyType": "HASH"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "draft_id", "AttributeType": "S"},
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    table.wait_until_exists()
+    dynamodb.meta.client.update_time_to_live(
+        TableName="Drafts",
+        TimeToLiveSpecification={"Enabled": True, "AttributeName": "ttl"},
+    )
+    print("Created table: Drafts (with 24h TTL)")
+
+
 if __name__ == "__main__":
     create_workspaces_table()
     create_tasks_table()
     create_transcripts_table()
+    create_drafts_table()
     print("\nAll tables created successfully.")

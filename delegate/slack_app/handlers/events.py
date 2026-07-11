@@ -30,7 +30,7 @@ def register_event_handlers(app):
         if event.get("bot_id") or event.get("subtype") == "bot_message":
             return
 
-        workspace_id = body.get("team_id", "")
+        workspace_id = body.get("enterprise_id") or body.get("team_id", "")
 
         # DM reply to a task thread
         if event.get("channel_type") == "im" and event.get("thread_ts"):
@@ -55,7 +55,7 @@ def register_event_handlers(app):
 
     @app.event("app_uninstalled")
     def handle_app_uninstalled_event(body, logger):
-        workspace_id = body.get("team_id", "")
+        workspace_id = body.get("enterprise_id") or body.get("team_id", "")
         if workspace_id:
             handle_app_uninstalled(workspace_id)
             logger.info(f"Workspace {workspace_id} marked as uninstalled")

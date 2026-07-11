@@ -260,7 +260,7 @@ def register_action_handlers(app):
         channel_id = payload["channel_id"]
         transcript_id = payload["transcript_id"]
         uploaded_by = body["user"]["id"]
-        workspace_id = body.get("team", {}).get("id") or body.get("team_id", "")
+        workspace_id = body.get("enterprise_id") or body.get("team", {}).get("id") or body.get("team_id", "")
 
         draft = drafts.get_draft(draft_id)
         if not draft:
@@ -365,7 +365,7 @@ def register_action_handlers(app):
             return
 
         organizer_id = body["user"]["id"]
-        workspace_id = body.get("team", {}).get("id") or body.get("team_id", "")
+        workspace_id = body.get("enterprise_id") or body.get("team", {}).get("id") or body.get("team_id", "")
         all_tasks = task_model.get_tasks_created_by(workspace_id, organizer_id)
         active_tasks = [t for t in all_tasks if t.get("status") == "pending"]
 

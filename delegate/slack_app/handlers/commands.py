@@ -27,7 +27,7 @@ def register_command_handlers(app):
         subcommand = body.get("text", "").strip().lower()
         user_id = body["user_id"]
         channel_id = body["channel_id"]
-        workspace_id = body.get("team_id", "")
+        workspace_id = body.get("enterprise_id") or body.get("team_id", "")
 
         if subcommand.startswith("search"):
             query = body.get("text", "")[len("search"):].strip()

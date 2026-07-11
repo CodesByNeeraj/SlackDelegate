@@ -65,7 +65,7 @@ def extract_tasks(transcript_text: str, meeting_date: str = None) -> list[dict]:
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5.4-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,
         response_format={

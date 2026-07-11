@@ -17,9 +17,12 @@ load_dotenv()
 
 
 def authorize(enterprise_id, team_id, logger):
-    workspace = workspace_model.get_workspace(team_id)
+    workspace_key = enterprise_id or team_id
+    if not workspace_key:
+        raise ValueError("No team_id or enterprise_id in request — cannot authorize")
+    workspace = workspace_model.get_workspace(workspace_key)
     if not workspace or workspace.get("status") != "active":
-        raise ValueError(f"Workspace {team_id} not found or inactive")
+        raise ValueError(f"Workspace {workspace_key} not found or inactive")
     bot_token = decrypt_token(workspace["bot_token"])
     return AuthorizeResult(
         enterprise_id=enterprise_id,

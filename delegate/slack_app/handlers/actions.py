@@ -93,10 +93,12 @@ def register_action_handlers(app):
             _TIME_OPTION_BLOCKS[-2],  # default to 6:00 PM
         )
 
+        page = payload.get("page", 0)
         private_metadata = json.dumps(
             {
                 "draft_id": draft_id,
                 "task_index": task_index,
+                "page": page,
                 "channel_id": draft["channel_id"],
                 "message_ts": draft["message_ts"],
                 "transcript_id": draft["transcript_id"],
@@ -180,6 +182,7 @@ def register_action_handlers(app):
         metadata = json.loads(body["view"]["private_metadata"])
         draft_id = metadata["draft_id"]
         task_index = metadata["task_index"]
+        page = metadata.get("page", 0)
         channel_id = metadata["channel_id"]
         message_ts = metadata["message_ts"]
         transcript_id = metadata["transcript_id"]
@@ -202,7 +205,7 @@ def register_action_handlers(app):
 
         draft = drafts.get_draft(draft_id)
         updated_blocks = build_review_blocks(
-            draft["tasks"], draft_id, channel_id, transcript_id
+            draft["tasks"], draft_id, channel_id, transcript_id, page=page
         )
 
         client.chat_update(
@@ -218,6 +221,7 @@ def register_action_handlers(app):
         payload = json.loads(body["actions"][0]["value"])
         draft_id = payload["draft_id"]
         task_index = payload["task_index"]
+        page = payload.get("page", 0)
 
         draft = drafts.get_draft(draft_id)
         if not draft:
@@ -242,8 +246,53 @@ def register_action_handlers(app):
             )
             return
 
+        # Stay on current page, but clamp in case it's now out of range
         updated_blocks = build_review_blocks(
-            draft["tasks"], draft_id, draft["channel_id"], draft["transcript_id"]
+            draft["tasks"], draft_id, draft["channel_id"], draft["transcript_id"], page=page
+        )
+        client.chat_update(
+            channel=draft["channel_id"],
+            ts=draft["message_ts"],
+            text=f"Review {len(draft['tasks'])} action item(s)",
+            blocks=updated_blocks,
+        )
+
+    @app.action("next_page_tasks")
+    def handle_next_page_tasks(ack, body, client, logger):
+        ack()
+        payload = json.loads(body["actions"][0]["value"])
+        draft_id = payload["draft_id"]
+        page = payload["page"]
+
+        draft = drafts.get_draft(draft_id)
+        if not draft:
+            logger.error(f"Draft {draft_id} not found")
+            return
+
+        updated_blocks = build_review_blocks(
+            draft["tasks"], draft_id, draft["channel_id"], draft["transcript_id"], page=page
+        )
+        client.chat_update(
+            channel=draft["channel_id"],
+            ts=draft["message_ts"],
+            text=f"Review {len(draft['tasks'])} action item(s)",
+            blocks=updated_blocks,
+        )
+
+    @app.action("prev_page_tasks")
+    def handle_prev_page_tasks(ack, body, client, logger):
+        ack()
+        payload = json.loads(body["actions"][0]["value"])
+        draft_id = payload["draft_id"]
+        page = payload["page"]
+
+        draft = drafts.get_draft(draft_id)
+        if not draft:
+            logger.error(f"Draft {draft_id} not found")
+            return
+
+        updated_blocks = build_review_blocks(
+            draft["tasks"], draft_id, draft["channel_id"], draft["transcript_id"], page=page
         )
         client.chat_update(
             channel=draft["channel_id"],
@@ -260,7 +309,10 @@ def register_action_handlers(app):
         channel_id = payload["channel_id"]
         transcript_id = payload["transcript_id"]
         uploaded_by = body["user"]["id"]
-        workspace_id = body.get("enterprise_id") or body.get("team", {}).get("id") or body.get("team_id", "")
+        workspace_id = body.get("enterprise_id") or (body.get("enterprise") or {}).get("id") or (body.get("team") or {}).get("id") or body.get("team_id", "")
+        if not workspace_id:
+            logger.error(f"Could not resolve workspace_id from body keys: {list(body.keys())}")
+            return
 
         draft = drafts.get_draft(draft_id)
         if not draft:
@@ -365,7 +417,7 @@ def register_action_handlers(app):
             return
 
         organizer_id = body["user"]["id"]
-        workspace_id = body.get("enterprise_id") or body.get("team", {}).get("id") or body.get("team_id", "")
+        workspace_id = body.get("enterprise_id") or (body.get("enterprise") or {}).get("id") or (body.get("team") or {}).get("id") or body.get("team_id", "")
         all_tasks = task_model.get_tasks_created_by(workspace_id, organizer_id)
         active_tasks = [t for t in all_tasks if t.get("status") == "pending"]
 

@@ -1,6 +1,0 @@
-slack-bolt
-slack-cli-hooks<1.0.0
-python-dotenv
-python-docx
-pdfplumber
-requests

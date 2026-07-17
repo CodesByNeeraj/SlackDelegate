@@ -17,6 +17,7 @@ Based on their reply, call exactly one tool:
 - request_reschedule: they need more time and explicitly mention a specific future date to reschedule to
 - request_reassignment: they think someone else should own this task
 - ask_for_date: they want more time but have not mentioned a specific date — ask them to provide one
+- cancel_request: they are withdrawing or cancelling a previous request ("nevermind", "its okay", "forget it", "don't worry about it")
 - no_action_needed: the reply is a question, casual acknowledgement, or not an actionable update
 
 When calling request_reschedule or request_reassignment, extract the reason directly from the person's reply. Use their own words as closely as possible — do not invent or infer a reason that isn't stated. If they give no reason, set reason to an empty string.
@@ -84,6 +85,14 @@ _TOOLS = [
                 },
                 "required": ["message"],
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cancel_request",
+            "description": "The person is withdrawing or cancelling a previous request they made (e.g. 'nevermind', 'its okay', 'forget it').",
+            "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
     {

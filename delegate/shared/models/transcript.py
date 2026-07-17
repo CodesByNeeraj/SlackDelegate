@@ -27,11 +27,14 @@ def create_transcript(
     uploaded_by: str,
     channel_id: str,
     chunks: list[dict] | None = None,
+    filename: str | None = None,
+    file_permalink: str | None = None,
+    embedding_tokens: int | None = None,
+    extraction_prompt_tokens: int | None = None,
+    extraction_completion_tokens: int | None = None,
+    extraction_latency_ms: int | None = None,
+    task_count: int | None = None,
 ) -> dict:
-    """
-    chunks: list of {chunk_index, text, embedding_json} from embed_transcript_chunks.
-    Stored on the transcript item so search_transcripts can score them directly.
-    """
     table = get_table(TABLE_NAME)
     transcript_id = str(uuid.uuid4())
     now = _now_iso()
@@ -43,6 +46,13 @@ def create_transcript(
         "uploaded_by": uploaded_by,
         "channel_id": channel_id,
         "created_at": now,
+        "filename": filename or "unknown",
+        "file_permalink": file_permalink or "",
+        "embedding_tokens": embedding_tokens or 0,
+        "extraction_prompt_tokens": extraction_prompt_tokens or 0,
+        "extraction_completion_tokens": extraction_completion_tokens or 0,
+        "extraction_latency_ms": extraction_latency_ms or 0,
+        "task_count": task_count or 0,
     }
     if chunks:
         item["chunks"] = chunks

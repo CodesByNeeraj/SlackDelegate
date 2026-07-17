@@ -301,6 +301,13 @@ def _handle_dm_reply(event, client, logger, workspace_id: str):
             text=args.get("message", "Could you share a specific date you'd like to request?"),
         )
 
+    elif action == "cancel_request":
+        client.chat_postMessage(
+            channel=dm_channel,
+            thread_ts=thread_ts,
+            text=":thumbsup: No problem! Your task remains unchanged.",
+        )
+
     elif action == "no_action_needed":
         pass
 

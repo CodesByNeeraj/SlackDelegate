@@ -1,4 +1,5 @@
 import uuid
+import time
 from dotenv import load_dotenv
 from slack_app.agents.tools.parsetext import (
     extract_text_from_docx,
@@ -69,6 +70,8 @@ def _handle_file_upload(body, event, client, say, logger, workspace_id: str):
     file_data = files[0]
     file_url = file_data["url_private_download"]
     file_type = file_data["filetype"]
+    filename = file_data.get("name", "unknown")
+    file_permalink = file_data.get("permalink", "")
     channel_id = event["channel"]
     uploaded_by = event["user"]
 
@@ -99,11 +102,24 @@ def _handle_file_upload(body, event, client, say, logger, workspace_id: str):
         say(text="That file appears to be empty, nothing for me to extract. Please upload a non-empty meeting transcript file.", channel=channel_id)
         return
 
+    embedding_tokens = 0
     try:
-        chunks = embed_transcript_chunks(transcript_text)
+        chunks, embedding_tokens = embed_transcript_chunks(transcript_text)
     except Exception as e:
         logger.warning(f"Chunk embedding failed, transcript will not be searchable: {e}")
         chunks = None
+
+    say(text="Extracting action items, this'll take a few seconds...", channel=channel_id)
+
+    extraction_usage = {}
+    try:
+        t0 = time.time()
+        tasks, extraction_usage = extract_tasks(transcript_text)
+        extraction_latency_ms = int((time.time() - t0) * 1000)
+    except Exception as e:
+        logger.error(f"Task extraction failed: {e}")
+        say(text="Something went wrong while extracting tasks, mind trying again?", channel=channel_id)
+        return
 
     transcript_record = transcript_model.create_transcript(
         workspace_id=workspace_id,
@@ -111,16 +127,14 @@ def _handle_file_upload(body, event, client, say, logger, workspace_id: str):
         uploaded_by=uploaded_by,
         channel_id=channel_id,
         chunks=chunks,
+        filename=filename,
+        file_permalink=file_permalink,
+        embedding_tokens=embedding_tokens,
+        extraction_prompt_tokens=extraction_usage.get("prompt_tokens", 0),
+        extraction_completion_tokens=extraction_usage.get("completion_tokens", 0),
+        extraction_latency_ms=extraction_latency_ms,
+        task_count=len(tasks),
     )
-
-    say(text="Extracting action items, this'll take a few seconds...", channel=channel_id)
-
-    try:
-        tasks = extract_tasks(transcript_text)
-    except Exception as e:
-        logger.error(f"Task extraction failed: {e}")
-        say(text="Something went wrong while extracting tasks, mind trying again?", channel=channel_id)
-        return
 
     if len(tasks) == 0:
         say(

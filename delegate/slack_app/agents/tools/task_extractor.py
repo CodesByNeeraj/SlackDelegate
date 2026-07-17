@@ -81,4 +81,8 @@ def extract_tasks(transcript_text: str, meeting_date: str = None) -> list[dict]:
     raw_content = response.choices[0].message.content
     parsed = json.loads(raw_content)  # guaranteed valid JSON matching the schema
 
-    return parsed["tasks"]
+    usage = {
+        "prompt_tokens": response.usage.prompt_tokens,
+        "completion_tokens": response.usage.completion_tokens,
+    }
+    return parsed["tasks"], usage

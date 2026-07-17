@@ -41,17 +41,21 @@ def chunk_text(text: str, max_words: int = 400) -> list[str]:
     return chunks
 
 
-def embed_transcript_chunks(text: str) -> list[dict]:
+def embed_transcript_chunks(text: str) -> tuple[list[dict], int]:
     """
     Splits the transcript into ~400-word chunks and embeds each one.
-    Returns list of {chunk_index, text, embedding_json}.
+    Returns (chunks, total_tokens) where chunks is list of {chunk_index, text, embedding_json}.
     """
-    chunks = chunk_text(text)
-    return [
-        {
+    raw_chunks = chunk_text(text)
+    chunks = []
+    total_tokens = 0
+    for i, chunk in enumerate(raw_chunks):
+        chunk_clean = chunk.replace("\n", " ").strip()
+        response = _client.embeddings.create(input=chunk_clean, model=_MODEL)
+        total_tokens += response.usage.total_tokens
+        chunks.append({
             "chunk_index": i,
             "text": chunk,
-            "embedding_json": json.dumps(generate_embedding(chunk)),
-        }
-        for i, chunk in enumerate(chunks)
-    ]
+            "embedding_json": json.dumps(response.data[0].embedding),
+        })
+    return chunks, total_tokens

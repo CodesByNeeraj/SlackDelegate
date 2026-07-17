@@ -4,6 +4,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from shared.models import task as task_model
 from shared.models import transcript as transcript_model
+from shared.models import search_log
 from slack_app.agents.tools.embeddings import generate_embedding
 from slack_app.agents.tools.task_filter import apply_task_filter
 
@@ -123,16 +124,46 @@ def run(query: str, user_id: str, workspace_id: str, user_name: str | None = Non
 
     if not top_chunks:
         answer = "Sorry, I could not find anything matching your query. Please try rephrasing or providing more context."
+        snippets = []
+        source_blocks = []
     else:
         chunks_with_tasks = [
             (chunk, task_model.get_tasks_for_transcript(chunk["workspace_id"], chunk["transcript_id"]))
             for chunk in top_chunks
         ]
         answer = answer_search_query(query, chunks_with_tasks, user_name=user_name)
+        snippets = [chunk["chunk_text"] for chunk in top_chunks]
+
+        seen = {}
+        for chunk in top_chunks:
+            tid = chunk["transcript_id"]
+            if tid not in seen:
+                t = transcript_model.get_transcript(chunk["workspace_id"], tid)
+                if t:
+                    seen[tid] = t
+
+        source_lines = []
+        for t in seen.values():
+            permalink = t.get("file_permalink", "")
+            fname = t.get("filename", "unknown")
+            if permalink:
+                source_lines.append(f"• <{permalink}|{fname}>")
+            else:
+                source_lines.append(f"• {fname}")
+
+        source_blocks = [
+            {"type": "context", "elements": [{"type": "mrkdwn", "text": ":page_facing_up: *Sources:* " + "  ".join(source_lines)}]}
+        ] if source_lines else []
+
+    try:
+        search_log.log_search(workspace_id=workspace_id, user_id=user_id, query=query, snippets=snippets, answer=answer)
+    except Exception:
+        pass
 
     blocks = [
         {"type": "section", "text": {"type": "mrkdwn", "text": f":mag: *Search results for:* _{query}_"}},
         {"type": "divider"},
         {"type": "section", "text": {"type": "mrkdwn", "text": answer}},
+        *source_blocks,
     ]
     return answer, blocks

@@ -24,6 +24,8 @@ _TRANSCRIPT_SYSTEM_PROMPT = """You are Delegate, an intelligent meeting intellig
 
 Answer the question using only the transcript excerpts and task information provided below. Be concise and specific.
 If the answer cannot be found in the provided context, say so clearly and do not guess or make up information.
+Ensure your response uses correct grammar and clear sentence structure throughout.
+If the name of the person asking appears anywhere in the transcript or your answer, replace it with "you" or "your" — never refer to them by name.
 """ + _FORMATTING_RULES
 
 _TASKS_SYSTEM_PROMPT = """You are Delegate, an intelligent task intelligence agent. You have real-time visibility into delegated tasks and their current status.
@@ -68,6 +70,13 @@ def _today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+_SPECIFIC_PAST_KEYWORDS = {"previous", "last", "most recent", "latest", "yesterday", "prior", "last meeting", "previous meeting"}
+
+def _has_specific_past_intent(query: str) -> bool:
+    q = query.lower()
+    return any(kw in q for kw in _SPECIFIC_PAST_KEYWORDS)
+
+
 def answer_search_query(query: str, chunks_with_tasks: list[tuple[dict, list]], user_name: str | None = None) -> str:
     """
     Route 2: Semantic search only.
@@ -83,13 +92,15 @@ def answer_search_query(query: str, chunks_with_tasks: list[tuple[dict, list]], 
         )
 
     context = "\n\n---\n\n".join(context_parts)
-    user_line = f"The person asking is: {user_name}\n" if user_name else ""
+
+    name_instruction = f'The person asking is "{user_name}". If "{user_name}" appears anywhere in the transcript or your answer, replace it with "you" or "your".' if user_name else ""
+    system_prompt = _TRANSCRIPT_SYSTEM_PROMPT + (f"\n{name_instruction}" if name_instruction else "")
 
     response = _client.chat.completions.create(
         model="gpt-5.4-mini",
         messages=[
-            {"role": "system", "content": _TRANSCRIPT_SYSTEM_PROMPT},
-            {"role": "user", "content": f"Today's date: {_today()}\n{user_line}Question: {query}\n\nContext:\n{context}"},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Today's date: {_today()}\nQuestion: {query}\n\nContext:\n{context}"},
         ],
         temperature=0.3,
     )
@@ -120,7 +131,8 @@ def run(query: str, user_id: str, workspace_id: str, user_name: str | None = Non
     Returns (answer_text, slack_blocks).
     """
     query_embedding = generate_embedding(query)
-    top_chunks = transcript_model.search_transcripts(workspace_id, query_embedding, top_n=3)
+    max_transcripts = 1 if _has_specific_past_intent(query) else None
+    top_chunks = transcript_model.search_transcripts(workspace_id, query_embedding, top_n=3, max_transcripts=max_transcripts)
 
     if not top_chunks:
         answer = "Sorry, I could not find anything matching your query. Please try rephrasing or providing more context."

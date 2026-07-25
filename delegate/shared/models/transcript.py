@@ -77,13 +77,17 @@ def search_transcripts(
     workspace_id: str,
     query_embedding: list[float],
     top_n: int = 3,
+    max_transcripts: int | None = None,
 ) -> list[dict]:
     """
     Scores every chunk across all transcripts by cosine similarity.
     Returns the top_n chunks as dicts with transcript metadata attached.
     Transcripts without chunks (uploaded before this feature) are skipped.
+    If max_transcripts is set, only the most recent N transcripts are searched.
     """
     transcripts = get_transcripts_for_workspace(workspace_id)
+    if max_transcripts is not None:
+        transcripts = sorted(transcripts, key=lambda t: t.get("created_at", ""), reverse=True)[:max_transcripts]
     scored = []
 
     for t in transcripts:

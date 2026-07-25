@@ -10,6 +10,7 @@ from slack_app.agents.tools.embeddings import embed_transcript_chunks
 from slack_app.agents.reply_agent import interpret_reply
 from slack_app.agents import master_orchestrator, search_agent
 from slack_app.agents.tools import status_tool, digest_tool
+from slack_app.agents.tools.participant_extractor import extract_participants
 from slack_app.agents.tools.task_filter import apply_task_filter
 from slack_app.services.slack_client import download_file_content
 from slack_app.blocks.task_review import build_review_blocks
@@ -109,6 +110,8 @@ def _handle_file_upload(body, event, client, say, logger, workspace_id: str):
         logger.warning(f"Chunk embedding failed, transcript will not be searchable: {e}")
         chunks = None
 
+    participants = extract_participants(transcript_text)
+
     say(text="Extracting action items, this'll take a few seconds...", channel=channel_id)
 
     extraction_usage = {}
@@ -129,6 +132,7 @@ def _handle_file_upload(body, event, client, say, logger, workspace_id: str):
         chunks=chunks,
         filename=filename,
         file_permalink=file_permalink,
+        participants=participants,
         embedding_tokens=embedding_tokens,
         extraction_prompt_tokens=extraction_usage.get("prompt_tokens", 0),
         extraction_completion_tokens=extraction_usage.get("completion_tokens", 0),

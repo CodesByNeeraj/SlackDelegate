@@ -34,6 +34,7 @@ def create_transcript(
     extraction_completion_tokens: int | None = None,
     extraction_latency_ms: int | None = None,
     task_count: int | None = None,
+    participants: list[str] | None = None,
 ) -> dict:
     table = get_table(TABLE_NAME)
     transcript_id = str(uuid.uuid4())
@@ -53,6 +54,7 @@ def create_transcript(
         "extraction_completion_tokens": extraction_completion_tokens or 0,
         "extraction_latency_ms": extraction_latency_ms or 0,
         "task_count": task_count or 0,
+        "participants": participants or [],
     }
     if chunks:
         item["chunks"] = chunks
@@ -73,19 +75,31 @@ def get_transcripts_for_workspace(workspace_id: str) -> list[dict]:
     return response.get("Items", [])
 
 
+def _name_matches(filter_name: str, participants: list[str]) -> bool:
+    fn = filter_name.lower()
+    return any(fn in p.lower() or p.lower() in fn for p in participants)
+
+
 def search_transcripts(
     workspace_id: str,
     query_embedding: list[float],
     top_n: int = 3,
     max_transcripts: int | None = None,
+    participant_filter: list[str] | None = None,
 ) -> list[dict]:
     """
     Scores every chunk across all transcripts by cosine similarity.
     Returns the top_n chunks as dicts with transcript metadata attached.
     Transcripts without chunks (uploaded before this feature) are skipped.
     If max_transcripts is set, only the most recent N transcripts are searched.
+    If participant_filter is set, only transcripts containing all those names are searched.
     """
     transcripts = get_transcripts_for_workspace(workspace_id)
+    if participant_filter:
+        transcripts = [
+            t for t in transcripts
+            if all(_name_matches(name, t.get("participants", [])) for name in participant_filter)
+        ]
     if max_transcripts is not None:
         transcripts = sorted(transcripts, key=lambda t: t.get("created_at", ""), reverse=True)[:max_transcripts]
     scored = []

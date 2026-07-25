@@ -15,30 +15,56 @@ def generate_embedding(text: str) -> list[float]:
     return response.data[0].embedding
 
 
-def chunk_text(text: str, max_words: int = 400) -> list[str]:
-    """
-    Splits text into chunks of ~max_words, respecting paragraph boundaries.
-    Keeps chunks under text-embedding-3-small's 8191 token limit.
-    """
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+_SEPARATORS = ["\n\n", "\n", ". ", " "]
+
+
+def _split_recursive(text: str, max_words: int, depth: int = 0) -> list[str]:
+    if len(text.split()) <= max_words:
+        return [text.strip()]
+
+    if depth >= len(_SEPARATORS):
+        words = text.split()
+        return [" ".join(words[i : i + max_words]) for i in range(0, len(words), max_words)]
+
+    sep = _SEPARATORS[depth]
+    parts = [p.strip() for p in text.split(sep) if p.strip()]
+
     chunks = []
     current: list[str] = []
     current_words = 0
 
-    for para in paragraphs:
-        para_words = len(para.split())
-        if current_words + para_words > max_words and current:
+    for part in parts:
+        part_words = len(part.split())
+        if part_words > max_words:
+            if current:
+                chunks.append("\n\n".join(current))
+                current, current_words = [], 0
+            chunks.extend(_split_recursive(part, max_words, depth + 1))
+        elif current_words + part_words > max_words and current:
             chunks.append("\n\n".join(current))
-            current = [para]
-            current_words = para_words
+            current, current_words = [part], part_words
         else:
-            current.append(para)
-            current_words += para_words
+            current.append(part)
+            current_words += part_words
 
     if current:
         chunks.append("\n\n".join(current))
 
     return chunks
+
+
+def chunk_text(text: str, max_words: int = 400, overlap_words: int = 50) -> list[str]:
+    raw = _split_recursive(text, max_words)
+    if len(raw) <= 1:
+        return raw
+
+    result = [raw[0]]
+    for i in range(1, len(raw)):
+        prev_words = raw[i - 1].split()
+        overlap = " ".join(prev_words[-overlap_words:])
+        result.append(overlap + "\n\n" + raw[i])
+
+    return result
 
 
 def embed_transcript_chunks(text: str) -> tuple[list[dict], int]:

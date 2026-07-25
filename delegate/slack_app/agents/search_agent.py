@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime, timezone
 from openai import OpenAI
@@ -77,6 +78,68 @@ def _has_specific_past_intent(query: str) -> bool:
     return any(kw in q for kw in _SPECIFIC_PAST_KEYWORDS)
 
 
+_RERANK_SYSTEM_PROMPT = """You evaluate whether retrieved text chunks are relevant to answering a user's query.
+
+Label each chunk as "relevant" or "not" based on:
+- "relevant": directly answers the query OR provides necessary supporting context
+- "not": loosely related, tangential, or does not help answer the query
+
+Return only valid JSON with no explanation.
+
+---
+Example 1:
+Query: "What is Docker?"
+Chunks: {"c1": "Docker is a container platform that packages applications and their dependencies.", "c2": "Kubernetes manages containerized workloads across clusters.", "c3": "Containers allow apps to run in isolated environments."}
+Output: {"c1": "relevant", "c2": "not", "c3": "relevant"}
+
+---
+Example 2:
+Query: "What budget was approved for Q3?"
+Chunks: {"c1": "The team discussed marketing strategies for the product launch.", "c2": "Finance approved $50k for Q3 operations during the board meeting.", "c3": "Project timelines were reviewed and milestones are on track."}
+Output: {"c1": "not", "c2": "relevant", "c3": "not"}
+
+---
+Example 3:
+Query: "Who is responsible for the API integration?"
+Chunks: {"c1": "John was assigned the API integration task due end of month.", "c2": "The frontend team is building the new dashboard.", "c3": "Sarah said she would support John on the API work if needed."}
+Output: {"c1": "relevant", "c2": "not", "c3": "relevant"}
+"""
+
+
+def _rerank_chunks(query: str, chunks: list[dict]) -> list[dict]:
+    """
+    Labels each chunk relevant/not in one LLM call.
+    Returns relevant chunks in lost-in-the-middle order (best first, second best last).
+    Falls back to top cosine chunk if all are labeled not relevant.
+    """
+    if len(chunks) <= 1:
+        return chunks
+
+    chunk_map = {f"c{i + 1}": chunk for i, chunk in enumerate(chunks)}
+    chunks_payload = json.dumps({k: v["chunk_text"] for k, v in chunk_map.items()})
+
+    try:
+        response = _client.chat.completions.create(
+            model="gpt-5.4-mini",
+            messages=[
+                {"role": "system", "content": _RERANK_SYSTEM_PROMPT},
+                {"role": "user", "content": f'Query: "{query}"\nChunks: {chunks_payload}'},
+            ],
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+        labels = json.loads(response.choices[0].message.content)
+    except Exception:
+        return chunks
+
+    relevant = [chunk_map[k] for k in sorted(chunk_map) if labels.get(k) == "relevant"]
+
+    if not relevant:
+        return [chunks[0]]
+
+    return relevant
+
+
 def answer_search_query(query: str, chunks_with_tasks: list[tuple[dict, list]], user_name: str | None = None) -> str:
     """
     Route 2: Semantic search only.
@@ -132,13 +195,14 @@ def run(query: str, user_id: str, workspace_id: str, user_name: str | None = Non
     """
     query_embedding = generate_embedding(query)
     max_transcripts = 1 if _has_specific_past_intent(query) else None
-    top_chunks = transcript_model.search_transcripts(workspace_id, query_embedding, top_n=3, max_transcripts=max_transcripts)
+    top_chunks = transcript_model.search_transcripts(workspace_id, query_embedding, top_n=10, max_transcripts=max_transcripts)
 
     if not top_chunks:
         answer = "Sorry, I could not find anything matching your query. Please try rephrasing or providing more context."
         snippets = []
         source_blocks = []
     else:
+        top_chunks = _rerank_chunks(query, top_chunks)
         chunks_with_tasks = [
             (chunk, task_model.get_tasks_for_transcript(chunk["workspace_id"], chunk["transcript_id"]))
             for chunk in top_chunks

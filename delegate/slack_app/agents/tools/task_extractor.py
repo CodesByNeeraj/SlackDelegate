@@ -1,10 +1,11 @@
 import os
 import json
 from datetime import datetime
-from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from langfuse.openai import OpenAI
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -76,6 +77,7 @@ def extract_tasks(transcript_text: str, meeting_date: str = None) -> list[dict]:
                 "strict": True,
             },
         },
+        name="extract-tasks",
     )
 
     raw_content = response.choices[0].message.content

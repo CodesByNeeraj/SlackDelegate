@@ -1,10 +1,11 @@
 import json
 import os
 from datetime import datetime
-from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from langfuse.openai import OpenAI
 
 _client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -123,6 +124,7 @@ def interpret_reply(task_description: str, reply_text: str, today: str = None) -
         tools=_TOOLS,
         tool_choice="required",
         temperature=0,
+        name="interpret-reply",
     )
 
     tool_call = response.choices[0].message.tool_calls[0]

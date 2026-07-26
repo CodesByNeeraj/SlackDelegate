@@ -1,6 +1,7 @@
 import uuid
 import time
 from dotenv import load_dotenv
+from langfuse import observe, get_client, propagate_attributes
 from slack_app.agents.tools.parsetext import (
     extract_text_from_docx,
     extract_text_from_pdf,
@@ -63,11 +64,24 @@ def register_event_handlers(app):
             logger.info(f"Workspace {workspace_id} marked as uninstalled")
 
 
+@observe(name="handle-file-upload", capture_input=False, capture_output=False)
 def _handle_file_upload(body, event, client, say, logger, workspace_id: str):
     files = event.get("files", [])
     if not files:
         return
 
+    with propagate_attributes(
+        user_id=event.get("user"),
+        session_id=event.get("channel"),
+        tags=["file-upload"],
+        metadata={"workspace_id": workspace_id},
+    ):
+        get_client().update_current_span(input=f"file: {files[0].get('name', 'unknown')}")
+        _handle_file_upload_body(body, event, client, say, logger, workspace_id)
+
+
+def _handle_file_upload_body(body, event, client, say, logger, workspace_id: str):
+    files = event.get("files", [])
     file_data = files[0]
     file_url = file_data["url_private_download"]
     file_type = file_data["filetype"]
@@ -183,7 +197,19 @@ def _handle_file_upload(body, event, client, say, logger, workspace_id: str):
     drafts.set_message_ts(draft_id, response["ts"])
 
 
+@observe(name="handle-dm-reply", capture_input=False, capture_output=False)
 def _handle_dm_reply(event, client, logger, workspace_id: str):
+    with propagate_attributes(
+        user_id=event.get("user"),
+        session_id=event.get("thread_ts"),
+        tags=["dm-reply"],
+        metadata={"workspace_id": workspace_id},
+    ):
+        get_client().update_current_span(input=event.get("text", "").strip())
+        _handle_dm_reply_body(event, client, logger, workspace_id)
+
+
+def _handle_dm_reply_body(event, client, logger, workspace_id: str):
     thread_ts = event["thread_ts"]
     reply_text = event.get("text", "").strip()
     replying_user = event["user"]
@@ -316,7 +342,19 @@ def _handle_dm_reply(event, client, logger, workspace_id: str):
         pass
 
 
+@observe(name="handle-general-dm", capture_input=False, capture_output=False)
 def _handle_general_dm(event, client, logger, workspace_id: str):
+    with propagate_attributes(
+        user_id=event.get("user"),
+        session_id=event.get("channel"),
+        tags=["general-dm"],
+        metadata={"workspace_id": workspace_id},
+    ):
+        get_client().update_current_span(input=event.get("text", "").strip())
+        _handle_general_dm_body(event, client, logger, workspace_id)
+
+
+def _handle_general_dm_body(event, client, logger, workspace_id: str):
     text = event.get("text", "").strip()
     user_id = event["user"]
     channel_id = event["channel"]
@@ -330,6 +368,7 @@ def _handle_general_dm(event, client, logger, workspace_id: str):
     route = classification["route"]
     args = classification["args"]
     logger.info(f"Master orchestrator: route={route} args={args}")
+    get_client().update_current_span(metadata={"route": route})
 
     if route == "out_of_scope":
         client.chat_postMessage(
@@ -350,6 +389,7 @@ def _handle_general_dm(event, client, logger, workspace_id: str):
             searching_msg = client.chat_postMessage(channel=channel_id, text=":mag: Searching...")
             answer, blocks = search_agent.run(query, user_id, workspace_id, user_name=user_name)
             client.chat_update(channel=channel_id, ts=searching_msg["ts"], text=answer, blocks=blocks)
+            get_client().update_current_span(output=answer)
 
         elif route == "tasks_db_search":
             query = args.get("query", text)
@@ -363,14 +403,17 @@ def _handle_general_dm(event, client, logger, workspace_id: str):
                 {"type": "section", "text": {"type": "mrkdwn", "text": answer}},
             ]
             client.chat_update(channel=channel_id, ts=searching_msg["ts"], text=answer, blocks=blocks)
+            get_client().update_current_span(output=answer)
 
         elif route == "invoke_status_tool":
             blocks, text_summary = status_tool.run(user_id, workspace_id)
             client.chat_postMessage(channel=channel_id, blocks=blocks, text=text_summary)
+            get_client().update_current_span(output=text_summary)
 
         elif route == "invoke_digest_tool":
             blocks, text_summary = digest_tool.run(user_id, workspace_id)
             client.chat_postMessage(channel=channel_id, blocks=blocks, text=text_summary)
+            get_client().update_current_span(output=text_summary)
 
     except Exception as e:
         logger.error(f"Sub-agent failed (route={route}): {e}")

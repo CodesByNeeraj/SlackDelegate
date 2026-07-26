@@ -1,9 +1,10 @@
 import json
 import os
-from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from langfuse.openai import OpenAI
 
 _client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -104,6 +105,7 @@ def classify(text: str) -> dict:
         tools=_TOOLS,
         tool_choice="required",
         temperature=0,
+        name="classify-intent",
     )
     tool_call = response.choices[0].message.tool_calls[0]
     return {

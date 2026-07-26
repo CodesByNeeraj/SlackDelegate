@@ -1,9 +1,10 @@
 import json
 import os
-from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from langfuse.openai import OpenAI
 
 _client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -26,6 +27,7 @@ def extract_participants(transcript_text: str) -> list[str]:
             ],
             temperature=0,
             response_format={"type": "json_object"},
+            name="extract-participants",
         )
         names = json.loads(response.choices[0].message.content).get("names", [])
     except Exception:

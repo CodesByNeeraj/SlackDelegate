@@ -9,4 +9,5 @@ fastapi
 uvicorn[standard]
 slack_sdk
 openai
+langfuse
 cryptography

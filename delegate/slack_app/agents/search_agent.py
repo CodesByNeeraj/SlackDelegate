@@ -1,7 +1,6 @@
 import json
 import os
 from datetime import datetime, timezone
-from openai import OpenAI
 from dotenv import load_dotenv
 from shared.models import task as task_model
 from shared.models import transcript as transcript_model
@@ -10,6 +9,9 @@ from slack_app.agents.tools.embeddings import generate_embedding
 from slack_app.agents.tools.task_filter import apply_task_filter
 
 load_dotenv()
+
+from langfuse import observe, get_client
+from langfuse.openai import OpenAI
 
 _client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -89,11 +91,12 @@ def _extract_query_participants(query: str, user_name: str | None) -> list[str] 
         response = _client.chat.completions.create(
             model="gpt-5.4-mini",
             messages=[
-                {"role": "system", "content": 'Extract person names explicitly mentioned in this query. Return {"names": [...]}. If no person names appear, return {"names": []}. Do not include pronouns like "I" or "me".'},
+                {"role": "system", "content": 'Extract person names explicitly mentioned in this query. Return a JSON object: {"names": [...]}. If no person names appear, return {"names": []}. Do not include pronouns like "I" or "me".'},
                 {"role": "user", "content": query},
             ],
             temperature=0,
             response_format={"type": "json_object"},
+            name="extract-query-participants",
         )
         names = json.loads(response.choices[0].message.content).get("names", [])
     except Exception:
@@ -155,6 +158,7 @@ def _rerank_chunks(query: str, chunks: list[dict]) -> list[dict]:
             ],
             temperature=0,
             response_format={"type": "json_object"},
+            name="rerank-chunks",
         )
         labels = json.loads(response.choices[0].message.content)
     except Exception:
@@ -194,6 +198,7 @@ def answer_search_query(query: str, chunks_with_tasks: list[tuple[dict, list]], 
             {"role": "user", "content": f"Today's date: {_today()}\nQuestion: {query}\n\nContext:\n{context}"},
         ],
         temperature=0.3,
+        name="answer-transcript-query",
     )
     return response.choices[0].message.content
 
@@ -210,20 +215,27 @@ def answer_from_tasks(query: str, tasks: list, user_name: str | None = None) -> 
             {"role": "user", "content": f"Today's date: {_today()}\n{user_line}Question: {query}\n\nTasks:\n{tasks_context}"},
         ],
         temperature=0.3,
+        name="answer-tasks-query",
     )
     return response.choices[0].message.content
 
 
 
+@observe(name="search-agent", as_type="agent", capture_input=False, capture_output=False)
 def run(query: str, user_id: str, workspace_id: str, user_name: str | None = None) -> tuple[str, list]:
     """
     Search agent entry point — invoked by master orchestrator via invoke_search_agent.
     Embeds the query, searches transcript chunks, fetches their tasks, and synthesizes an answer.
     Returns (answer_text, slack_blocks).
     """
+    get_client().update_current_span(input=query)
     query_embedding = generate_embedding(query)
     max_transcripts = 1 if _has_specific_past_intent(query) else None
     participant_filter = _extract_query_participants(query, user_name)
+    get_client().update_current_span(metadata={
+        "max_transcripts": str(max_transcripts),
+        "participant_filter": ",".join(participant_filter) if participant_filter else "",
+    })
     top_chunks = transcript_model.search_transcripts(
         workspace_id, query_embedding, top_n=10,
         max_transcripts=max_transcripts,
@@ -268,6 +280,8 @@ def run(query: str, user_id: str, workspace_id: str, user_name: str | None = Non
         search_log.log_search(workspace_id=workspace_id, user_id=user_id, query=query, snippets=snippets, answer=answer)
     except Exception:
         pass
+
+    get_client().update_current_span(output=answer)
 
     blocks = [
         {"type": "section", "text": {"type": "mrkdwn", "text": f":mag: *Search results for:* _{query}_"}},

@@ -1,9 +1,10 @@
 import json
 import os
-from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from langfuse.openai import OpenAI
 
 _client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 _MODEL = "text-embedding-3-small"
@@ -11,7 +12,7 @@ _MODEL = "text-embedding-3-small"
 
 def generate_embedding(text: str) -> list[float]:
     text = text.replace("\n", " ").strip()
-    response = _client.embeddings.create(input=text, model=_MODEL)
+    response = _client.embeddings.create(input=text, model=_MODEL, name="generate-embedding")
     return response.data[0].embedding
 
 
@@ -77,7 +78,7 @@ def embed_transcript_chunks(text: str) -> tuple[list[dict], int]:
     total_tokens = 0
     for i, chunk in enumerate(raw_chunks):
         chunk_clean = chunk.replace("\n", " ").strip()
-        response = _client.embeddings.create(input=chunk_clean, model=_MODEL)
+        response = _client.embeddings.create(input=chunk_clean, model=_MODEL, name="embed-transcript-chunk")
         total_tokens += response.usage.total_tokens
         chunks.append({
             "chunk_index": i,

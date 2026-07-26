@@ -73,7 +73,6 @@ def _today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-_FIRST_PERSON_WORDS = {"i", "me", "my", "myself"}
 _SPECIFIC_PAST_KEYWORDS = {"previous", "last", "most recent", "latest", "yesterday", "prior", "last meeting", "previous meeting"}
 
 def _has_specific_past_intent(query: str) -> bool:
@@ -102,8 +101,7 @@ def _extract_query_participants(query: str, user_name: str | None) -> list[str] 
     except Exception:
         names = []
 
-    words = set(query.lower().split())
-    if user_name and words & _FIRST_PERSON_WORDS:
+    if user_name:
         names.append(user_name)
 
     return names if names else None
@@ -243,7 +241,10 @@ def run(query: str, user_id: str, workspace_id: str, user_name: str | None = Non
     )
 
     if not top_chunks:
-        answer = "Sorry, I could not find anything matching your query. Please try rephrasing or providing more context."
+        if user_name and not transcript_model.user_has_transcripts(workspace_id, user_name):
+            answer = "Sorry, I'm not allowed to answer about meetings you were not part of."
+        else:
+            answer = "Sorry, I could not find anything matching your query. Please try rephrasing or providing more context."
         snippets = []
         source_blocks = []
     else:

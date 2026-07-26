@@ -80,6 +80,11 @@ def _name_matches(filter_name: str, participants: list[str]) -> bool:
     return any(fn in p.lower() or p.lower() in fn for p in participants)
 
 
+def user_has_transcripts(workspace_id: str, user_name: str) -> bool:
+    transcripts = get_transcripts_for_workspace(workspace_id)
+    return any(_name_matches(user_name, t.get("participants", [])) for t in transcripts)
+
+
 def search_transcripts(
     workspace_id: str,
     query_embedding: list[float],

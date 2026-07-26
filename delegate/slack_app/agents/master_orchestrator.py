@@ -90,7 +90,7 @@ _TOOLS = [
 ]
 
 
-def classify(text: str) -> dict:
+def classify(text: str, history: list[dict] | None = None) -> dict:
     """
     Returns {"route": str, "args": dict}
     route is one of: invoke_search_agent, tasks_db_search,
@@ -100,6 +100,7 @@ def classify(text: str) -> dict:
         model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
+            *(history or []),
             {"role": "user", "content": text},
         ],
         tools=_TOOLS,

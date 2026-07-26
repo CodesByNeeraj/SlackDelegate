@@ -29,12 +29,14 @@ Answer the question using only the transcript excerpts and task information prov
 If the answer cannot be found in the provided context, say so clearly and do not guess or make up information.
 Ensure your response uses correct grammar and clear sentence structure throughout.
 If the name of the person asking appears anywhere in the transcript or your answer, replace it with "you" or "your" — never refer to them by name.
+Prior conversation history is included above. Only use it if the current question is a follow-up that cannot be understood without it — ignore it if the question stands on its own.
 """ + _FORMATTING_RULES
 
 _TASKS_SYSTEM_PROMPT = """You are Delegate, an intelligent task intelligence agent. You have real-time visibility into delegated tasks and their current status.
 
 Answer the question using only the task data provided. Be concise and specific.
 If the answer cannot be determined from the task data, say so clearly.
+Prior conversation history is included above. Only use it if the current question is a follow-up that cannot be understood without it — ignore it if the question stands on its own.
 """ + _FORMATTING_RULES
 
 
@@ -170,7 +172,7 @@ def _rerank_chunks(query: str, chunks: list[dict]) -> list[dict]:
     return relevant
 
 
-def answer_search_query(query: str, chunks_with_tasks: list[tuple[dict, list]], user_name: str | None = None) -> str:
+def answer_search_query(query: str, chunks_with_tasks: list[tuple[dict, list]], user_name: str | None = None, history: list[dict] | None = None) -> str:
     """
     Route 2: Semantic search only.
     chunks_with_tasks: list of (chunk_info, tasks) ordered by relevance.
@@ -193,6 +195,7 @@ def answer_search_query(query: str, chunks_with_tasks: list[tuple[dict, list]], 
         model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": system_prompt},
+            *(history or []),
             {"role": "user", "content": f"Today's date: {_today()}\nQuestion: {query}\n\nContext:\n{context}"},
         ],
         temperature=0.3,
@@ -201,7 +204,7 @@ def answer_search_query(query: str, chunks_with_tasks: list[tuple[dict, list]], 
     return response.choices[0].message.content
 
 
-def answer_from_tasks(query: str, tasks: list, user_name: str | None = None) -> str:
+def answer_from_tasks(query: str, tasks: list, user_name: str | None = None, history: list[dict] | None = None) -> str:
     """Route 1: Tasks DB only — no transcript context."""
     tasks_context = _format_flat_tasks(tasks)
     user_line = f"The person asking is: {user_name}\n" if user_name else ""
@@ -210,6 +213,7 @@ def answer_from_tasks(query: str, tasks: list, user_name: str | None = None) -> 
         model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": _TASKS_SYSTEM_PROMPT},
+            *(history or []),
             {"role": "user", "content": f"Today's date: {_today()}\n{user_line}Question: {query}\n\nTasks:\n{tasks_context}"},
         ],
         temperature=0.3,
@@ -220,7 +224,7 @@ def answer_from_tasks(query: str, tasks: list, user_name: str | None = None) -> 
 
 
 @observe(name="search-agent", as_type="agent", capture_input=False, capture_output=False)
-def run(query: str, user_id: str, workspace_id: str, user_name: str | None = None) -> tuple[str, list]:
+def run(query: str, user_id: str, workspace_id: str, user_name: str | None = None, history: list[dict] | None = None) -> tuple[str, list]:
     """
     Search agent entry point — invoked by master orchestrator via invoke_search_agent.
     Embeds the query, searches transcript chunks, fetches their tasks, and synthesizes an answer.
@@ -253,7 +257,7 @@ def run(query: str, user_id: str, workspace_id: str, user_name: str | None = Non
             (chunk, task_model.get_tasks_for_transcript(chunk["workspace_id"], chunk["transcript_id"]))
             for chunk in top_chunks
         ]
-        answer = answer_search_query(query, chunks_with_tasks, user_name=user_name)
+        answer = answer_search_query(query, chunks_with_tasks, user_name=user_name, history=history)
         snippets = [chunk["chunk_text"] for chunk in top_chunks]
 
         seen = {}

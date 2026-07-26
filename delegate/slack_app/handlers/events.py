@@ -21,6 +21,7 @@ from slack_app import drafts
 from slack_app.handlers.oauth import handle_app_uninstalled
 from shared.models import transcript as transcript_model
 from shared.models import task as task_model
+from shared.models import conversation as conversation_model
 
 load_dotenv()
 
@@ -359,8 +360,10 @@ def _handle_general_dm_body(event, client, logger, workspace_id: str):
     user_id = event["user"]
     channel_id = event["channel"]
 
+    history = conversation_model.get_history(workspace_id, user_id)
+
     try:
-        classification = master_orchestrator.classify(text)
+        classification = master_orchestrator.classify(text, history=history)
     except Exception as e:
         logger.error(f"Master orchestrator failed: {e}")
         return
@@ -384,10 +387,12 @@ def _handle_general_dm_body(event, client, logger, workspace_id: str):
         except Exception:
             user_name = None
 
+        answer = None
+
         if route == "invoke_search_agent":
             query = args.get("query", text)
             searching_msg = client.chat_postMessage(channel=channel_id, text=":mag: Searching...")
-            answer, blocks = search_agent.run(query, user_id, workspace_id, user_name=user_name)
+            answer, blocks = search_agent.run(query, user_id, workspace_id, user_name=user_name, history=history)
             client.chat_update(channel=channel_id, ts=searching_msg["ts"], text=answer, blocks=blocks)
             get_client().update_current_span(output=answer)
 
@@ -396,7 +401,7 @@ def _handle_general_dm_body(event, client, logger, workspace_id: str):
             searching_msg = client.chat_postMessage(channel=channel_id, text=":mag: Searching...")
             all_tasks = task_model.get_tasks_created_by(workspace_id, user_id)
             filtered = apply_task_filter(all_tasks, args)
-            answer = search_agent.answer_from_tasks(query, filtered, user_name=user_name)
+            answer = search_agent.answer_from_tasks(query, filtered, user_name=user_name, history=history)
             blocks = [
                 {"type": "section", "text": {"type": "mrkdwn", "text": f":mag: *Search results for:* _{query}_"}},
                 {"type": "divider"},
@@ -414,6 +419,12 @@ def _handle_general_dm_body(event, client, logger, workspace_id: str):
             blocks, text_summary = digest_tool.run(user_id, workspace_id)
             client.chat_postMessage(channel=channel_id, blocks=blocks, text=text_summary)
             get_client().update_current_span(output=text_summary)
+
+        if answer:
+            try:
+                conversation_model.append_exchange(workspace_id, user_id, text, answer)
+            except Exception:
+                pass
 
     except Exception as e:
         logger.error(f"Sub-agent failed (route={route}): {e}")

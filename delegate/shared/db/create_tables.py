@@ -100,9 +100,43 @@ def create_drafts_table():
     print("Created table: Drafts (with 24h TTL)")
 
 
+def create_search_logs_table():
+    table = dynamodb.create_table(
+        TableName="SearchLogs",
+        KeySchema=[
+            {"AttributeName": "log_id", "KeyType": "HASH"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "log_id", "AttributeType": "S"},
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    table.wait_until_exists()
+    print("Created table: SearchLogs")
+
+
+def create_conversation_history_table():
+    table = dynamodb.create_table(
+        TableName="ConversationHistory",
+        KeySchema=[
+            {"AttributeName": "workspace_id", "KeyType": "HASH"},
+            {"AttributeName": "user_id", "KeyType": "RANGE"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "workspace_id", "AttributeType": "S"},
+            {"AttributeName": "user_id", "AttributeType": "S"},
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    table.wait_until_exists()
+    print("Created table: ConversationHistory (with 2h TTL)")
+
+
 if __name__ == "__main__":
     create_workspaces_table()
     create_tasks_table()
     create_transcripts_table()
     create_drafts_table()
+    create_search_logs_table()
+    create_conversation_history_table()
     print("\nAll tables created successfully.")

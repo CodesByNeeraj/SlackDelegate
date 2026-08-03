@@ -115,6 +115,23 @@ def create_search_logs_table():
     print("Created table: SearchLogs")
 
 
+def create_transcript_chunks_table():
+    table = dynamodb.create_table(
+        TableName="TranscriptChunks",
+        KeySchema=[
+            {"AttributeName": "workspace_id", "KeyType": "HASH"},
+            {"AttributeName": "chunk_key", "KeyType": "RANGE"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "workspace_id", "AttributeType": "S"},
+            {"AttributeName": "chunk_key", "AttributeType": "S"},
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    table.wait_until_exists()
+    print("Created table: TranscriptChunks")
+
+
 def create_conversation_history_table():
     table = dynamodb.create_table(
         TableName="ConversationHistory",

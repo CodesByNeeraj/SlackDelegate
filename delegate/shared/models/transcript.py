@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from shared.db.dynamo_client import get_table
+from shared.models import chunk as chunk_model
 
 TABLE_NAME = "Transcripts"
 
@@ -26,7 +27,6 @@ def create_transcript(
     raw_text: str,
     uploaded_by: str,
     channel_id: str,
-    chunks: list[dict] | None = None,
     filename: str | None = None,
     file_permalink: str | None = None,
     embedding_tokens: int | None = None,
@@ -56,8 +56,6 @@ def create_transcript(
         "task_count": task_count or 0,
         "participants": participants or [],
     }
-    if chunks:
-        item["chunks"] = chunks
 
     table.put_item(Item=item)
     return item
@@ -88,16 +86,14 @@ def user_has_transcripts(workspace_id: str, user_name: str) -> bool:
 def search_transcripts(
     workspace_id: str,
     query_embedding: list[float],
-    top_n: int = 3,
+    top_n: int = 10,
     max_transcripts: int | None = None,
     participant_filter: list[str] | None = None,
 ) -> list[dict]:
     """
-    Scores every chunk across all transcripts by cosine similarity.
-    Returns the top_n chunks as dicts with transcript metadata attached.
-    Transcripts without chunks (uploaded before this feature) are skipped.
-    If max_transcripts is set, only the most recent N transcripts are searched.
-    If participant_filter is set, only transcripts containing all those names are searched.
+    Scores every chunk in TranscriptChunks by cosine similarity.
+    Applies participant and temporal filters on the transcript level before scoring.
+    Returns the top_n chunks with transcript metadata attached.
     """
     transcripts = get_transcripts_for_workspace(workspace_id)
     if participant_filter:
@@ -107,20 +103,31 @@ def search_transcripts(
         ]
     if max_transcripts is not None:
         transcripts = sorted(transcripts, key=lambda t: t.get("created_at", ""), reverse=True)[:max_transcripts]
-    scored = []
 
-    for t in transcripts:
-        for chunk in t.get("chunks", []):
-            stored = json.loads(chunk["embedding_json"])
-            score = _cosine_similarity(query_embedding, stored)
-            scored.append((score, {
-                "chunk_text": chunk["text"],
-                "chunk_index": chunk["chunk_index"],
-                "transcript_id": t["transcript_id"],
-                "workspace_id": t["workspace_id"],
-                "created_at": t.get("created_at", ""),
-                "uploaded_by": t.get("uploaded_by", ""),
-            }))
+    if not transcripts:
+        return []
+
+    valid_ids = {t["transcript_id"] for t in transcripts}
+    t_meta = {t["transcript_id"]: t for t in transcripts}
+
+    all_chunks = chunk_model.get_chunks_for_workspace(workspace_id)
+
+    scored = []
+    for chunk in all_chunks:
+        tid = chunk["transcript_id"]
+        if tid not in valid_ids:
+            continue
+        t = t_meta[tid]
+        stored = json.loads(chunk["embedding_json"])
+        score = _cosine_similarity(query_embedding, stored)
+        scored.append((score, {
+            "chunk_text": chunk["text"],
+            "chunk_index": chunk["chunk_index"],
+            "transcript_id": tid,
+            "workspace_id": workspace_id,
+            "created_at": t.get("created_at", ""),
+            "uploaded_by": t.get("uploaded_by", ""),
+        }))
 
     scored.sort(key=lambda x: x[0], reverse=True)
     return [chunk_info for _, chunk_info in scored[:top_n]]
@@ -129,3 +136,4 @@ def search_transcripts(
 def delete_transcript(workspace_id: str, transcript_id: str) -> None:
     table = get_table(TABLE_NAME)
     table.delete_item(Key={"workspace_id": workspace_id, "transcript_id": transcript_id})
+    chunk_model.delete_chunks_for_transcript(workspace_id, transcript_id)

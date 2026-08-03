@@ -22,6 +22,7 @@ from slack_app.handlers.oauth import handle_app_uninstalled
 from shared.models import transcript as transcript_model
 from shared.models import task as task_model
 from shared.models import conversation as conversation_model
+from shared.models import chunk as chunk_model
 
 load_dotenv()
 
@@ -144,7 +145,6 @@ def _handle_file_upload_body(body, event, client, say, logger, workspace_id: str
         raw_text=transcript_text,
         uploaded_by=uploaded_by,
         channel_id=channel_id,
-        chunks=chunks,
         filename=filename,
         file_permalink=file_permalink,
         participants=participants,
@@ -154,6 +154,9 @@ def _handle_file_upload_body(body, event, client, say, logger, workspace_id: str
         extraction_latency_ms=extraction_latency_ms,
         task_count=len(tasks),
     )
+
+    if chunks:
+        chunk_model.save_chunks(workspace_id, transcript_record["transcript_id"], chunks)
 
     if len(tasks) == 0:
         say(

@@ -61,7 +61,7 @@ def _chunk_by_speaker(text: str) -> list[str] | None:
     """
     import re
     lines = text.splitlines()
-    pattern = re.compile(r"^[A-Za-z][A-Za-z\s]{0,30}:\s+\S")
+    pattern = re.compile(r"^(\d+\s+)?[A-Za-z][A-Za-z\s]{0,30}:\s+\S")
     turns = []
     current = []
 

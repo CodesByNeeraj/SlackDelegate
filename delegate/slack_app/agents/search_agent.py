@@ -278,7 +278,13 @@ def run(query: str, user_id: str, workspace_id: str, user_name: str | None = Non
                 source_lines.append(f"• {fname}")
 
         source_blocks = [
-            {"type": "context", "elements": [{"type": "mrkdwn", "text": ":page_facing_up: *Sources:* " + "  ".join(source_lines)}]}
+            {
+                "type": "context",
+                "elements": [
+                    {"type": "mrkdwn", "text": ":page_facing_up: *Sources:*"},
+                    *[{"type": "mrkdwn", "text": line} for line in source_lines],
+                ],
+            }
         ] if source_lines else []
 
     try:

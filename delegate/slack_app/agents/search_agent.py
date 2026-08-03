@@ -82,31 +82,8 @@ def _has_specific_past_intent(query: str) -> bool:
     return any(kw in q for kw in _SPECIFIC_PAST_KEYWORDS)
 
 
-def _extract_query_participants(query: str, user_name: str | None) -> list[str] | None:
-    """
-    Extracts person names mentioned in the query.
-    Adds user_name if first-person pronouns are detected.
-    Returns None if no names found (no participant filter needed).
-    """
-    try:
-        response = _client.chat.completions.create(
-            model="gpt-5.4-mini",
-            messages=[
-                {"role": "system", "content": 'Extract person names explicitly mentioned in this query. Return a JSON object: {"names": [...]}. If no person names appear, return {"names": []}. Do not include pronouns like "I" or "me".'},
-                {"role": "user", "content": query},
-            ],
-            temperature=0,
-            response_format={"type": "json_object"},
-            name="extract-query-participants",
-        )
-        names = json.loads(response.choices[0].message.content).get("names", [])
-    except Exception:
-        names = []
-
-    if user_name:
-        names.append(user_name)
-
-    return names if names else None
+def _participant_filter(user_name: str | None) -> list[str] | None:
+    return [user_name] if user_name else None
 
 
 _RERANK_SYSTEM_PROMPT = """You evaluate whether retrieved text chunks are relevant to answering a user's query.
@@ -233,7 +210,7 @@ def run(query: str, user_id: str, workspace_id: str, user_name: str | None = Non
     get_client().update_current_span(input=query)
     query_embedding = generate_embedding(query)
     max_transcripts = 1 if _has_specific_past_intent(query) else None
-    participant_filter = _extract_query_participants(query, user_name)
+    participant_filter = _participant_filter(user_name)
     get_client().update_current_span(metadata={
         "max_transcripts": str(max_transcripts),
         "participant_filter": ",".join(participant_filter) if participant_filter else "",

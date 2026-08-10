@@ -26,24 +26,6 @@ Delegate fixes this entirely within Slack. An organizer uploads a meeting transc
 
 ---
 
-## Why These Technologies?
-
-**Slack Bolt (Python)** - Delegate lives inside Slack, so building natively on Bolt gave us the full event handling, block kit, and OAuth surface without abstraction layers. Socket Mode allowed rapid local development without exposing a public endpoint during iteration.
-
-**OpenAI GPT-4o-mini** - Task extraction, reply interpretation, and semantic search answers all require language understanding. GPT-4o-mini hits the right balance of capability and cost for high-frequency operations like per-transcript extraction and per-query answering.
-
-**OpenAI text-embedding-3-small** - Fast, cheap, and accurate enough for semantic similarity over meeting transcript chunks. Used to embed both transcript chunks at upload time and user queries at search time.
-
-**AWS DynamoDB** - Serverless, pay-per-request, and schema-flexible. Since each workspace has its own isolated data and load patterns vary significantly, DynamoDB's on-demand billing avoids over-provisioning. The multi-tenant model scoped entirely by `workspace_id` maps cleanly onto DynamoDB's partition key design.
-
-**AWS KMS** - Bot tokens are sensitive credentials. KMS ensures they are never stored in plaintext, with encryption and decryption happening server-side without the key ever touching application memory.
-
-**FastAPI** - Handles the OAuth install flow (the `/slack/install` and `/slack/oauth/callback` endpoints). Thin, fast, and easy to deploy alongside the Bolt app.
-
-**Langfuse** - LLM observability. Every extraction, embedding, search, and reranking call is traced with token counts and latency, which feeds directly into the internal cost monitor.
-
----
-
 ## Product Walkthrough
 
 ### Task Delegation Flow
@@ -148,7 +130,7 @@ The organizer can cancel any active task. The task owner is notified in their ta
 
 **RAG Search with Transparency**
 
-Organizers can ask the bot questions about past meetings in plain English. The bot retrieves the most relevant transcript chunks, passes them through an LLM reranker to filter noise, and synthesises a grounded answer. Sources are shown so the user knows exactly which transcript the answer came from.
+Organizers can ask the bot questions about past meetings either by directly messaging or using the command /delegate [search query]. The bot retrieves the most relevant transcript chunks, passes them through an LLM reranker to filter noise, and finally formulates a grounded answer. Sources are shown so the user knows exactly which transcript the answer came from.
 
 ![RAG Search with Transparency](gallery/rag_search_with_transparency.png)
 
@@ -163,3 +145,35 @@ The query is embedded using the same embedding model used at upload time. The em
 When the search feature returns an answer, Delegate shows the user which transcript the answer was sourced from. This is an intentional design decision rooted in transparency and trust. AI-generated answers can be wrong, and users should always be able to verify the source themselves. By surfacing the originating transcript as a clickable link, we give users the means to check the answer against the actual meeting record rather than having to take it on faith.
 
 ![RAG Search with Transparency](gallery/rag_search_with_transparency.png)
+
+---
+
+## Tech Stack Used
+
+| Layer | Technology |
+|---|---|
+| Bot Framework | Slack Bolt (Python) |
+| LLM | OpenAI GPT-5.4-mini |
+| Embeddings | OpenAI text-embedding-3-small |
+| Database | AWS DynamoDB |
+| Token Encryption | AWS KMS |
+| API Server | FastAPI |
+| LLM Observability | Langfuse |
+
+---
+
+## Why These Technologies?
+
+**Slack Bolt (Python)** - Delegate lives inside Slack, so building natively on Bolt gave us the full event handling, block kit, and OAuth surface without abstraction layers. Socket Mode allowed rapid local development without exposing a public endpoint during iteration.
+
+**OpenAI GPT-5.4-mini** - Task extraction, reply interpretation, and semantic search answers all require language understanding. GPT-5.4-mini hits the right balance of capability and cost for high-frequency operations like per-transcript extraction and per-query answering.
+
+**OpenAI text-embedding-3-small** - Fast, cheap, and accurate enough for semantic similarity over meeting transcript chunks. Used to embed both transcript chunks at upload time and user queries at search time.
+
+**AWS DynamoDB** - Serverless, pay-per-request, and schema-flexible. Since each workspace has its own isolated data and load patterns vary significantly, DynamoDB's on-demand billing avoids over-provisioning. The multi-tenant model scoped entirely by `workspace_id` maps cleanly onto DynamoDB's partition key design.
+
+**AWS KMS** - Bot tokens are sensitive credentials. KMS ensures they are never stored in plaintext, with encryption and decryption happening server-side without the key ever touching application memory.
+
+**FastAPI** - Handles the OAuth install flow (the `/slack/install` and `/slack/oauth/callback` endpoints). Thin, fast, and easy to deploy alongside the Bolt app.
+
+**Langfuse** - LLM observability. Every extraction, embedding, search, and reranking call is traced with token counts and latency, which feeds directly into the internal cost monitor.

@@ -264,3 +264,11 @@ Evaluated using the RAGAS framework.
 
 **Answer Relevance** (not yet measured) - given the answer the LLM produced, prompt another LLM to generate a question that the answer would be responding to. Then measure how closely that generated question aligns with the original user query using cosine similarity. A high score means the answer is actually addressing what was asked. A low score means the answer may be technically grounded but off-topic. This metric should be incorporated in production to fully close the evaluation loop.
 
+---
+
+## View PRD
+
+> Success metrics and other metrics to look at when evaluating Delegate have been documented in the PRD.
+
+[View Full PRD](https://drive.google.com/file/d/1UPFsBdgRBO31ns7nS9FS1xXNftQN6TYf/view?usp=sharing)
+

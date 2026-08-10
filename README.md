@@ -146,7 +146,7 @@ The query is embedded using the same embedding model used at upload time. The em
 
 ![Langfuse Observability Steps](gallery/langfuse_observability_steps.png)
 
-*Each step of the pipeline - embedding, retrieval, reranking, and answer generation - is traced in Langfuse with token counts and latency.*
+*Each step of the pipeline (embedding, retrieval, reranking, and answer generation) is traced in Langfuse with token counts and latency.*
 
 ---
 

@@ -226,6 +226,12 @@ Alternatives considered:
 
 The sliding window keeps context bounded, cost predictable, and recency preserved. 3 exchanges covers the vast majority of real follow-up patterns in a meeting assistant context.
 
+### 3. Human-in-the-Loop Task Review
+
+When the LLM extracts tasks from a transcript, they are not sent to task owners immediately. Instead, the organizer is shown a review card first and must explicitly confirm before anything is dispatched.
+
+This is an intentional design decision rooted in valuing human oversight. LLMs can misattribute tasks, miss context, or extract something that sounds like an action item but was not actually agreed upon. By requiring the organizer to take a glance and confirm, we ensure there is always a human checking the output before it reaches someone's inbox. This prevents incorrectly assigned tasks from silently falling through and maintains trust in the delegation process.
+
 ---
 
 ## Evaluations

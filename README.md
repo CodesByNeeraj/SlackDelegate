@@ -138,6 +138,14 @@ Organizers can ask the bot questions about past meetings either by directly mess
 
 The query is embedded using the same embedding model used at upload time. The embedding is scored via cosine similarity against all stored transcript chunks and the top 10 chunks are retrieved. An LLM reranker then labels each chunk as relevant or not in a single call. Only the relevant chunks are passed to the answer LLM, which synthesises a response grounded strictly in that context.
 
+> LLMs are good at binary evaluation (relevant / not relevant) rather than assigning a numeric score, since a score is hard to interpret meaningfully without a clear reference point.
+
+![Rerank Example](gallery/rerank_example_binary_relavant_notrelavant.png)
+*The reranker labels each chunk as relevant or not relevant in a single LLM call.*
+
+![Langfuse Observability Steps](gallery/langfuse_observability_steps.png)
+*Each step of the pipeline - embedding, retrieval, reranking, and answer generation - is traced in Langfuse with token counts and latency.*
+
 ---
 
 ## Responsible AI

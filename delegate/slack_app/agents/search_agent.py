@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from shared.models import task as task_model
 from shared.models import transcript as transcript_model
+from shared.models.transcript import workspace_has_transcripts
 from shared.models import search_log
 from slack_app.agents.tools.embeddings import generate_embedding
 from slack_app.agents.tools.task_filter import apply_task_filter
@@ -222,7 +223,9 @@ def run(query: str, user_id: str, workspace_id: str, user_name: str | None = Non
     )
 
     if not top_chunks:
-        if user_name and not transcript_model.user_has_transcripts(workspace_id, user_name):
+        if not workspace_has_transcripts(workspace_id):
+            answer = "No transcripts have been uploaded yet. Upload a meeting transcript and I'll be able to answer questions about it."
+        elif user_name and not transcript_model.user_has_transcripts(workspace_id, user_name):
             answer = "Sorry, I'm not allowed to answer about meetings you were not part of."
         else:
             answer = "Sorry, I could not find anything matching your query. Please try rephrasing or providing more context."

@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 from shared.models import task as task_model
+from shared.models import conversation as conversation_model
 from slack_app.agents import search_agent, master_orchestrator
 from slack_app.agents.tools.task_filter import apply_task_filter
 from slack_app.blocks.mytasks import build_mytasks_blocks
@@ -47,22 +48,24 @@ def register_command_handlers(app):
                 user_name = None
 
             try:
-                classification = master_orchestrator.classify(query)
+                history = conversation_model.get_history(workspace_id, user_id)
+                classification = master_orchestrator.classify(query, history=history)
                 route = classification["route"]
                 args = classification["args"]
                 if route == "invoke_search_agent":
-                    answer, blocks = search_agent.run(args.get("query", query), user_id, workspace_id, user_name=user_name)
+                    answer, blocks = search_agent.run(args.get("query", query), user_id, workspace_id, user_name=user_name, history=history)
                 elif route == "tasks_db_search":
                     all_tasks = task_model.get_tasks_created_by(workspace_id, user_id)
                     filtered = apply_task_filter(all_tasks, args)
-                    answer = search_agent.answer_from_tasks(args.get("query", query), filtered, user_name=user_name)
+                    answer = search_agent.answer_from_tasks(args.get("query", query), filtered, user_name=user_name, history=history)
                     blocks = [
                         {"type": "section", "text": {"type": "mrkdwn", "text": f":mag: *Search results for:* _{query}_"}},
                         {"type": "divider"},
                         {"type": "section", "text": {"type": "mrkdwn", "text": answer}},
                     ]
                 else:
-                    answer, blocks = search_agent.run(query, user_id, workspace_id, user_name=user_name)
+                    answer, blocks = search_agent.run(query, user_id, workspace_id, user_name=user_name, history=history)
+                conversation_model.append_exchange(workspace_id, user_id, query, answer)
             except Exception as e:
                 logger.error(f"/delegate search failed: {e}")
                 client.chat_update(channel=channel_id, ts=searching_msg["ts"], text="Something went wrong. Please try again.")

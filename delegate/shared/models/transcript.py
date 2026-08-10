@@ -83,6 +83,11 @@ def user_has_transcripts(workspace_id: str, user_name: str) -> bool:
     return any(_name_matches(user_name, t.get("participants", [])) for t in transcripts)
 
 
+def workspace_has_transcripts(workspace_id: str) -> bool:
+    transcripts = get_transcripts_for_workspace(workspace_id)
+    return len(transcripts) > 0
+
+
 def search_transcripts(
     workspace_id: str,
     query_embedding: list[float],

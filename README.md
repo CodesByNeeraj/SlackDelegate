@@ -28,36 +28,6 @@ Delegate fixes this entirely within Slack. An organizer uploads a meeting transc
 
 ---
 
-## Evaluations
-
-> Note: Evaluations were conducted on 5 transcripts only. We acknowledge this is a small sample size. In production, a minimum of 30 samples is recommended to satisfy the central limit theorem and draw statistically meaningful conclusions. Personal time constraints limited the scope here.
-
-[View Full Evaluation Spreadsheet](https://docs.google.com/spreadsheets/d/1Pg1o8ZiQYTf6QPvQC84f2wK7_0HIL0nOLO3tZlXNFNg/edit?usp=sharing)
-
-### Part 1 - Task Extraction
-
-Evaluated on 5 AI-generated meeting transcripts that mimic real workplace conversations. For each transcript, tasks were manually extracted (owner, description, due date) and cross-compared against what the LLM returned. A match was determined by judgement - if the LLM-extracted task and the manually extracted task were substantively the same, it counted as a match.
-
-Two dimensions were measured:
-
-**Correctness** - of the tasks the LLM extracted, how many were actually valid tasks that exist in the transcript? This catches hallucinated or incorrectly attributed tasks.
-
-**Completeness** - of all real tasks present in the transcript, how many did the LLM find? This catches tasks the LLM missed entirely.
-
-### Part 2 - RAG Evaluation
-
-Evaluated using the RAGAS framework.
-
-![Delegate Internal Monitor](gallery/Delegate%20Internal%20Monitor.png)
-
-*The Delegate Internal Monitor showing search logs used for faithfulness review.*
-
-**Faithfulness** - the LLM answer is broken down into individual sentences. Each sentence is checked against the retrieved context to verify it is grounded in what was actually retrieved and not hallucinated.
-
-**Context Relevance** - modified to suit our use case. Rather than comparing at the sentence level within a chunk, we measure how many of the retrieved chunks were relevant to answering the query. This is more appropriate for speaker-turn based chunking where the chunk is the atomic unit of meaning, not the individual sentence.
-
----
-
 ## Product Walkthrough
 
 ### Task Delegation Flow
@@ -255,4 +225,34 @@ Alternatives considered:
 - **No memory** - every query treated as standalone. Simple, but breaks follow-up questions entirely ("what about the second point?" would fail).
 
 The sliding window keeps context bounded, cost predictable, and recency preserved. 3 exchanges covers the vast majority of real follow-up patterns in a meeting assistant context.
+
+---
+
+## Evaluations
+
+> Note: Evaluations were conducted on 5 transcripts only. We acknowledge this is a small sample size. In production, a minimum of 30 samples is recommended to satisfy the central limit theorem and draw statistically meaningful conclusions. Personal time constraints limited the scope here.
+
+[View Full Evaluation Spreadsheet](https://docs.google.com/spreadsheets/d/1Pg1o8ZiQYTf6QPvQC84f2wK7_0HIL0nOLO3tZlXNFNg/edit?usp=sharing)
+
+### Part 1 - Task Extraction
+
+Evaluated on 5 AI-generated meeting transcripts that mimic real workplace conversations. For each transcript, tasks were manually extracted (owner, description, due date) and cross-compared against what the LLM returned. A match was determined by judgement - if the LLM-extracted task and the manually extracted task were substantively the same, it counted as a match.
+
+Two dimensions were measured:
+
+**Correctness** - of the tasks the LLM extracted, how many were actually valid tasks that exist in the transcript? This catches hallucinated or incorrectly attributed tasks.
+
+**Completeness** - of all real tasks present in the transcript, how many did the LLM find? This catches tasks the LLM missed entirely.
+
+### Part 2 - RAG Evaluation
+
+Evaluated using the RAGAS framework.
+
+![Delegate Internal Monitor](gallery/Delegate%20Internal%20Monitor.png)
+
+*The Delegate Internal Monitor that was custom built showing search logs used for faithfulness review.*
+
+**Faithfulness** - the LLM answer is broken down into individual sentences. Each sentence is checked against the retrieved context to verify it is grounded in what was actually retrieved and not hallucinated.
+
+**Context Relevance** - modified to suit our use case. Rather than comparing at the sentence level within a chunk, we measure how many of the retrieved chunks were relevant to answering the query. This is more appropriate for speaker-turn based chunking where the chunk is the atomic unit of meaning, not the individual sentence.
 

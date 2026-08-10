@@ -194,3 +194,73 @@ Delegate enforces a strict access boundary on the search feature. If a user asks
 
 **Langfuse** - LLM observability. Every extraction, embedding, search, and reranking call is traced with token counts and latency, which feeds directly into the internal cost monitor.
 
+---
+
+## System Architecture Diagram
+
+![System Architecture Diagram](gallery/Slack%20Delegate%20Archi%20Diag.svg)
+
+```mermaid
+flowchart TD
+    User([Organizer / Task Owner])
+    Slack[Slack]
+
+    subgraph BoltApp["Delegate Bot (Slack Bolt)"]
+        direction TB
+        AppPy[app.py\nAuthorize + Route]
+        Events[events.py]
+        Actions[actions.py]
+        Commands[commands.py]
+
+        subgraph Agents["Agents"]
+            Orchestrator[Master Orchestrator]
+            SearchAgent[Search Agent]
+            ReplyAgent[Reply Agent]
+        end
+
+        subgraph Tools["Tools"]
+            Parser[PDF / DOCX Parser]
+            TaskExtractor[Task Extractor]
+            Embedder[Chunk Embedder]
+            Reranker[LLM Reranker]
+            NameMatcher[Name Matcher]
+            ParticipantExtractor[Participant Extractor]
+        end
+    end
+
+    subgraph OpenAI["OpenAI"]
+        LLM["GPT-5.4-mini"]
+        EmbedModel["text-embedding-3-small"]
+    end
+
+    subgraph AWS["AWS"]
+        DynamoDB[("DynamoDB\nWorkspaces / Transcripts\nTranscriptChunks / Tasks\nConversationHistory")]
+        KMS[KMS\nToken Encryption]
+    end
+
+    subgraph FastAPI["FastAPI (OAuth Server)"]
+        OAuthInstall[GET /slack/install]
+        OAuthCallback[GET /slack/oauth/callback]
+    end
+
+    Langfuse[Langfuse\nLLM Observability]
+
+    User -- message / file / command --> Slack
+    Slack -- WebSocket --> AppPy
+    AppPy --> Events & Actions & Commands
+    Events --> Orchestrator
+    Orchestrator --> SearchAgent & ReplyAgent
+    Events --> Parser --> TaskExtractor --> LLM
+    Events --> Embedder --> EmbedModel
+    Events --> ParticipantExtractor --> LLM
+    TaskExtractor --> NameMatcher
+    SearchAgent --> EmbedModel
+    SearchAgent --> DynamoDB
+    SearchAgent --> Reranker --> LLM
+    ReplyAgent --> LLM
+    Events & Actions & Commands --> DynamoDB
+    AppPy --> KMS
+    OAuthCallback --> KMS --> DynamoDB
+    BoltApp -.-> Langfuse
+```
+

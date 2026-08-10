@@ -156,6 +156,12 @@ When the search feature returns an answer, Delegate shows the user which transcr
 
 ![RAG Search with Transparency](gallery/rag_search_with_transparency.png)
 
+### Guardrails
+
+Delegate enforces a strict access boundary on the search feature. If a user asks about a meeting they were not part of, the bot will refuse to answer. Search results are scoped only to transcripts where the person asking was a participant. This ensures that sensitive meeting content is never surfaced to someone who had no business being in that meeting.
+
+![RAG Guardrail](gallery/rag_guardrail.png)
+
 ---
 
 ## Tech Stack Used
@@ -187,3 +193,4 @@ When the search feature returns an answer, Delegate shows the user which transcr
 **FastAPI** - Handles the OAuth install flow (the `/slack/install` and `/slack/oauth/callback` endpoints). Thin, fast, and easy to deploy alongside the Bolt app.
 
 **Langfuse** - LLM observability. Every extraction, embedding, search, and reranking call is traced with token counts and latency, which feeds directly into the internal cost monitor.
+

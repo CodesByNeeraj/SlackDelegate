@@ -539,7 +539,12 @@ def register_action_handlers(app):
         if original_owner_slack_id and original_owner_slack_id != "UNASSIGNED" and task_before.get("dm_message_ts"):
             orig_dm_channel = client.conversations_open(users=[original_owner_slack_id])["channel"]["id"]
             if pending.get("type") == "reschedule":
-                orig_msg = f":white_check_mark: Your deadline extension request was approved. New due date: *{pending.get('requested_due_date', '?')}*"
+                raw_date = pending.get('requested_due_date', '')
+                try:
+                    formatted_date = datetime.fromisoformat(raw_date).strftime("%b %d, %Y")
+                except (ValueError, TypeError):
+                    formatted_date = raw_date
+                orig_msg = f":white_check_mark: Your deadline extension request was approved. New due date: *{formatted_date}*"
             else:
                 orig_msg = ":white_check_mark: Your reassignment request was approved. The task has been reassigned."
             client.chat_postMessage(

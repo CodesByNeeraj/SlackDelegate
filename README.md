@@ -74,19 +74,19 @@ Once the organizer is satisfied, they confirm and the bot sends individualised t
 
 **5. Tasks Assigned to Oneself**
 
-What a task DM looks like from the perspective of someone who has been assigned a task.
+What a task DM looks like from the perspective of someone who is delegating tasks but at least one of the tasks belong to himself/herself.
 
 ![Tasks Assigned to Oneself](gallery/tasks_assigned_to_oneself.png)
 
-**6. Tasks Assigned to Another Person (POV)**
+**6. Tasks Assigned to Another Person**
 
-What the task DM looks like from the perspective of another assignee in the same delegation batch.
+What the task DM looks like from the perspective of another person who received a task in the same delegation batch.
 
 ![Tasks Assigned to Another Person](gallery/tasks_assigned_to_another_personpov.png)
 
 **7. Request for Extension**
 
-A task owner can reply in-thread to request a deadline extension. The bot routes the request to the organizer for approval.
+A task owner can reply in-thread to request a deadline extension or reassignment. The bot routes the request to the organizer for approval.
 
 ![Request for Extension](gallery/request_for_extension.png)
 

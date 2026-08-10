@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 def apply_task_filter(tasks: list, args: dict) -> list:
     status_filter = args.get("status_filter", "all")
-    owner_name = (args.get("owner_name") or "").strip().lower()
+    owner_names = [n.strip().lower() for n in (args.get("owner_names") or []) if n.strip()]
     now = datetime.now(timezone.utc).isoformat()
 
     if status_filter == "pending":
@@ -21,7 +21,7 @@ def apply_task_filter(tasks: list, args: dict) -> list:
             and t["due_date"] < now
         ]
 
-    if owner_name:
-        tasks = [t for t in tasks if owner_name in (t.get("owner_name_raw") or "").lower()]
+    if owner_names:
+        tasks = [t for t in tasks if any(n in (t.get("owner_name_raw") or "").lower() for n in owner_names)]
 
     return tasks

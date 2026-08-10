@@ -54,12 +54,13 @@ _TOOLS = [
                         "enum": ["all", "pending", "done", "cancelled", "overdue"],
                         "description": "Filter tasks by status. Use 'all' if no specific status is asked for.",
                     },
-                    "owner_name": {
-                        "type": "string",
-                        "description": "Filter by this person's name if mentioned. Empty string otherwise.",
+                    "owner_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Filter by these people's names if mentioned. Empty array otherwise.",
                     },
                 },
-                "required": ["query", "status_filter", "owner_name"],
+                "required": ["query", "status_filter", "owner_names"],
             },
         },
     },

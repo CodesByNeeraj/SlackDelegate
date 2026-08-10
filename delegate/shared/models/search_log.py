@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from shared.db.dynamo_client import get_table
 
-TABLE_NAME = os.environ.get("SEARCH_LOGS_TABLE", "SearchLogs")
+TABLE_NAME = os.environ["SEARCH_LOGS_TABLE"]
 
 
 def log_search(workspace_id: str, user_id: str, query: str, snippets: list[str], answer: str):

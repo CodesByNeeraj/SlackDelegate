@@ -73,6 +73,7 @@ def dashboard():
 
         answer_preview = log.get("answer", "").replace("<", "&lt;").replace(">", "&gt;")
         ts = log.get("timestamp", "")[:19].replace("T", " ")
+        remarks = log.get("remarks", "")
 
         search_rows += f"""
         <tr>
@@ -80,6 +81,7 @@ def dashboard():
             <td><b>{log.get("query","").replace("<","&lt;")}</b></td>
             <td>{snippet_html}</td>
             <td><pre style="white-space:pre-wrap;font-size:11px">{answer_preview}</pre></td>
+            <td>{remarks}</td>
             <td style="font-size:11px;color:#666">{log.get("workspace_id","")}</td>
         </tr>"""
 
@@ -131,6 +133,7 @@ def dashboard():
       <th>Query</th>
       <th>Source Snippets</th>
       <th>Answer</th>
+      <th>Remarks</th>
       <th>Workspace</th>
     </tr>
   </thead>

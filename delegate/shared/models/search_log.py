@@ -22,7 +22,7 @@ def log_search(workspace_id: str, user_id: str, query: str, snippets: list[str],
 
 def get_all_logs() -> list[dict]:
     table = get_table(_table_name())
-    response = table.scan(ProjectionExpression="log_id, workspace_id, #q, snippets, #ans, #ts",
+    response = table.scan(ProjectionExpression="log_id, workspace_id, #q, snippets, #ans, #ts, remarks",
                           ExpressionAttributeNames={"#q": "query", "#ans": "answer", "#ts": "timestamp"})
     items = response.get("Items", [])
     return sorted(items, key=lambda x: x.get("timestamp", ""), reverse=True)

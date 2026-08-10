@@ -20,9 +20,10 @@ Delegate fixes this entirely within Slack. An organizer uploads a meeting transc
 3. [Tech Stack Used](#tech-stack-used)
 4. [Why These Technologies?](#why-these-technologies)
 5. [System Architecture Diagram](#system-architecture-diagram)
-6. [Evaluations](#evaluations)
-7. [Challenges Faced](#challenges-faced)
-8. [View PRD](#view-prd)
+6. [Key Decisions Made](#key-decisions-made)
+7. [Evaluations](#evaluations)
+8. [Challenges Faced](#challenges-faced)
+9. [View PRD](#view-prd)
 
 ---
 
@@ -199,4 +200,28 @@ Delegate enforces a strict access boundary on the search feature. If a user asks
 ## System Architecture Diagram
 
 ![System Architecture Diagram](gallery/Slack%20Delegate%20Archi%20Diag.svg)
+
+---
+
+## Key Decisions Made
+
+### 1. Programmatic Tool Routing over LLM-Driven Tool Calling
+
+The master orchestrator uses an LLM to classify intent and return a route name. The actual tool or agent is then invoked by our code, not by the LLM itself.
+
+The alternative is to let the LLM call tools directly and chain them autonomously, which is how frameworks like LangChain agents and OpenAI Assistants work. This is more powerful for open-ended tasks where the LLM needs to reason about which tools to call and in what order. However it is harder to debug, can loop unpredictably, and costs more per query.
+
+For Delegate, the set of possible actions is fixed and well-defined. The routing decisions are simple enough that autonomous tool chaining adds unpredictability without meaningful benefit. Programmatic routing gives us full control over what runs, in what order, and makes failures easy to trace.
+
+### 2. Sliding Window for Conversational Memory
+
+To support follow-up questions, Delegate stores the last 3 exchanges (user message and bot answer) per user in DynamoDB and injects them into the LLM's context window on every query.
+
+Alternatives considered:
+
+- **Full history** - passing the entire conversation would grow the context window unboundedly, increasing cost and latency with every message, and introducing older irrelevant context that can confuse the LLM.
+- **Vector search over history** - embedding past messages and retrieving semantically similar ones adds significant complexity for a conversational assistant where recency matters more than semantic similarity.
+- **No memory** - every query treated as standalone. Simple, but breaks follow-up questions entirely ("what about the second point?" would fail).
+
+The sliding window keeps context bounded, cost predictable, and recency preserved. 3 exchanges covers the vast majority of real follow-up patterns in a meeting assistant context.
 

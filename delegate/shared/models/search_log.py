@@ -3,11 +3,12 @@ import uuid
 from datetime import datetime, timezone
 from shared.db.dynamo_client import get_table
 
-TABLE_NAME = os.environ["SEARCH_LOGS_TABLE"]
+def _table_name() -> str:
+    return os.environ["SEARCH_LOGS_TABLE"]
 
 
 def log_search(workspace_id: str, user_id: str, query: str, snippets: list[str], answer: str):
-    table = get_table(TABLE_NAME)
+    table = get_table(_table_name())
     table.put_item(Item={
         "log_id": str(uuid.uuid4()),
         "workspace_id": workspace_id,
@@ -20,7 +21,7 @@ def log_search(workspace_id: str, user_id: str, query: str, snippets: list[str],
 
 
 def get_all_logs() -> list[dict]:
-    table = get_table(TABLE_NAME)
+    table = get_table(_table_name())
     response = table.scan(ProjectionExpression="log_id, workspace_id, #q, snippets, #ans, #ts",
                           ExpressionAttributeNames={"#q": "query", "#ans": "answer", "#ts": "timestamp"})
     items = response.get("Items", [])

@@ -141,9 +141,11 @@ The query is embedded using the same embedding model used at upload time. The em
 > LLMs are good at binary evaluation (relevant / not relevant) rather than assigning a numeric score, since a score is hard to interpret meaningfully without a clear reference point.
 
 ![Rerank Example](gallery/rerank_example_binary_relavant_notrelavant.png)
+
 *The reranker labels each chunk as relevant or not relevant in a single LLM call.*
 
 ![Langfuse Observability Steps](gallery/langfuse_observability_steps.png)
+
 *Each step of the pipeline - embedding, retrieval, reranking, and answer generation - is traced in Langfuse with token counts and latency.*
 
 ---

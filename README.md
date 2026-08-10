@@ -2,9 +2,9 @@
 
 ## What is Delegate?
 
-Meetings are where decisions get made - but without a structured handoff, the tasks that come out of them fall through the cracks. Follow-ups get forgotten, deadlines slip, and the organizer is left chasing people down manually.
+Meetings are where decisions get made but without a structured handoff, the tasks that come out of them fall through the cracks. Follow-ups get forgotten, deadlines slip, and the organizer is left chasing people down manually.
 
-Delegate fixes this entirely within Slack. An organizer uploads a meeting transcript (PDF or DOCX) directly into the Delegate bot DM. The app uses AI to extract action items, identify who owns each task, and send individualised task DMs to the right people. Task owners reply in-thread to mark things done, request deadline extensions, or request reassignment - all of which route back to the organizer for approval. Organizers can also ask the bot questions in plain English and get answers synthesised directly from their past meeting transcripts.
+Delegate fixes this entirely within Slack. An organizer uploads a meeting transcript (PDF or DOCX) directly into the Delegate bot DM. The app uses AI to extract action items, identify who owns each task, and send individualised task DMs to the right people. Task owners reply in-thread to mark things done, request deadline extensions, or request reassignment, all of which route back to the organizer for approval. Organizers can also ask the bot questions regarding the past meetings they attended and get answers synthesised directly from their past meeting transcripts.
 
 No new tools. No new workflows. Just Slack.
 

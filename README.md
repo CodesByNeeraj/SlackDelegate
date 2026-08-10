@@ -267,7 +267,7 @@ Evaluated using the RAGAS framework.
 
 ## View PRD
 
-> Success metrics and other metrics to look at when evaluating Delegate have been documented in the PRD.
+> ❯ Success metrics to look at when evaluating Delegate have been documented in the PRD.
 
 [View Full PRD](https://drive.google.com/file/d/1UPFsBdgRBO31ns7nS9FS1xXNftQN6TYf/view?usp=sharing)
 

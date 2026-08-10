@@ -23,7 +23,7 @@ def extract_participants(transcript_text: str) -> list[str]:
             model="gpt-5.4-mini",
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": transcript_text[:6000]},
+                {"role": "user", "content": transcript_text},
             ],
             temperature=0,
             response_format={"type": "json_object"},

@@ -6,8 +6,6 @@ Meetings are where decisions get made but without a structured handoff, the task
 
 Delegate fixes this entirely within Slack. An organizer uploads a meeting transcript (PDF or DOCX) directly into the Delegate bot DM. The app uses AI to extract action items, identify who owns each task, and send individualised task DMs to the right people. Task owners reply in-thread to mark things done, request deadline extensions, or request reassignment, all of which route back to the organizer for approval. Organizers can also ask the bot questions regarding the past meetings they attended and get answers synthesised directly from their past meeting transcripts.
 
-No new tools. No new workflows. Just Slack.
-
 ## Why These Technologies?
 
 **Slack Bolt (Python)** - Delegate lives inside Slack, so building natively on Bolt gave us the full event handling, block kit, and OAuth surface without abstraction layers. Socket Mode allowed rapid local development without exposing a public endpoint during iteration.
@@ -35,7 +33,8 @@ No new tools. No new workflows. Just Slack.
 
 1. [Product Walkthrough](#product-walkthrough)
 2. [Tech Stack Used](#tech-stack-used)
-3. [System Architecture Diagram](#system-architecture-diagram)
-4. [Evaluations](#evaluations)
-5. [Challenges Faced](#challenges-faced)
-6. [View PRD](#view-prd)
+3. [Why These Technologies?](#why-these-technologies)
+4. [System Architecture Diagram](#system-architecture-diagram)
+5. [Evaluations](#evaluations)
+6. [Challenges Faced](#challenges-faced)
+7. [View PRD](#view-prd)

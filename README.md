@@ -23,8 +23,7 @@ Delegate fixes this entirely within Slack. An organizer uploads a meeting transc
 6. [Key Decisions Made](#key-decisions-made)
 7. [Evaluations](#evaluations)
 
-8. [Challenges Faced](#challenges-faced)
-9. [View PRD](#view-prd)
+8. [View PRD](#view-prd)
 
 ---
 
